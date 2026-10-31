@@ -55,7 +55,7 @@ try {
     $db->exec('PRAGMA synchronous=NORMAL;');
     $db->exec('PRAGMA temp_store=MEMORY;');
   } catch (Throwable $e) {}
-  if ((int)$db->query('PRAGMA user_version')->fetchColumn() < 8) {
+  if ((int)$db->query('PRAGMA user_version')->fetchColumn() < 9) {
   $db->exec("
   CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, hash TEXT NOT NULL, rev INTEGER NOT NULL DEFAULT 0);
   CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v TEXT);
@@ -87,9 +87,10 @@ try {
   $tcols = array_column($db->query('PRAGMA table_info(tokens)')->fetchAll(PDO::FETCH_ASSOC), 'name');
   if (!in_array('last_seen', $tcols)) $db->exec('ALTER TABLE tokens ADD COLUMN last_seen INTEGER');
   $db->exec("INSERT OR IGNORE INTO settings(k,v) VALUES('tombstone_horizon_rev', '0')");
-  $db->exec('PRAGMA user_version=8');
+  $db->exec('PRAGMA user_version=9');
   }
 
+  function cut($s, $n) { $s = trim((string)$s); return function_exists('mb_substr') ? mb_substr($s, 0, $n) : substr($s, 0, $n * 3); }
   function q($sql, $p = []) { global $db; $s = $db->prepare($sql); $s->execute($p); return $s; }
   function logev($type, $who = '') {
     try {   // লগ লিখতে না পারলেও লগইন/সিঙ্ক যেন না থামে

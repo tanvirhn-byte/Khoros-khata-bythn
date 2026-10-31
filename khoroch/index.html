@@ -1412,7 +1412,7 @@ label.fl input[type="file"] { display: none; }
 }
 </style></head><body>
 <div id="sp" onclick="hideSp()"><div class="lg" id="spl">T</div><h1 id="spt">খরচের খাতা</h1><div class="tg" id="spg">Your money, beautifully kept</div><div class="wl" id="sw"></div><p class="qt" id="sq"></p><div id="spn"></div><div id="sps"></div><button class="bt" id="spb" onclick="event.stopPropagation();hideSp()">শুরু করুন →</button><div class="ft" id="spc">Designed &amp; crafted with <span style="color:#2DD4BF">♥</span> by<br><b>Tanvir</b></div><div class="pr"><i></i></div></div>
-<div id="tp"><div id="nb"></div><div id="pwa-upd-bar" class="pwa-upd"><span>✨ অ্যাপের নতুন সংস্করণ প্রস্তুত আছে</span><div style="display:flex;gap:6px"><button class="p" style="padding:6px 12px;font-size:12.5px" onclick="applySwUpdate()">আপডেট করুন</button><button class="s" style="padding:6px 10px;font-size:12.5px" onclick="dismissSwUpdate()">পরে</button></div></div><header><div class="brand"><div class="logo">T</div><div><b id="hb">খরচের খাতা</b><small id="hs">by Tanvir</small></div></div><div class="hr"><button id="pwa-inst-btn" class="pwa-inst-hdr" onclick="triggerPwaInstall()" title="অ্যাপ ইনস্টল করুন">📲 ইনস্টল</button><i id="syd" class="syd ok" title="সিঙ্ক অবস্থা" onclick="toast(ssText())"></i><select id="pp" hidden></select><button class="gbtn" onclick="groupSheet()" aria-label="গ্রুপ বদলান"><span id="gn"></span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></div></header></div>
+<div id="tp"><div id="nb"></div><div id="pwa-upd-bar" class="pwa-upd"><span>✨ অ্যাপের নতুন সংস্করণ প্রস্তুত আছে</span><div style="display:flex;gap:6px"><button class="p" style="padding:6px 12px;font-size:12.5px" onclick="applySwUpdate()">আপডেট করুন</button><button class="s" style="padding:6px 10px;font-size:12.5px" onclick="dismissSwUpdate()">পরে</button></div></div><header><div class="brand"><div class="logo" id="hlg">T</div><div><b id="hb">খরচের খাতা</b><small id="hs">by Tanvir</small></div></div><div class="hr"><button id="pwa-inst-btn" class="pwa-inst-hdr" onclick="triggerPwaInstall()" title="অ্যাপ ইনস্টল করুন">📲 ইনস্টল</button><i id="syd" class="syd ok" title="সিঙ্ক অবস্থা" onclick="toast(ssText())"></i><select id="pp" hidden></select><button class="gbtn" onclick="groupSheet()" aria-label="গ্রুপ বদলান"><span id="gn"></span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></div></header></div>
 <main id="v"></main><div class="foot"><div id="ftn"></div><div id="fts"></div><span id="ftx">Crafted with care by</span> <span class="sig" id="fsg">Tanvir</span></div><nav id="nv"></nav><div id="mt"></div>
 <div id="tt"></div>
 <button id="fab" onclick="openForm()" aria-label="নতুন খরচ">+</button>
@@ -1464,12 +1464,14 @@ label.fl input[type="file"] { display: none; }
   </div>
 </div>
 <script>const APP_VERSION='1.0.0',APP_BUILD=1;let currentAppUpdate=null;
+// নতুন ক্লায়েন্টের জন্য ডিফল্ট ব্র্যান্ডিং (লগইন পেজ, রেজিস্ট্রেশন পেজ, হেডার, ওয়েলকাম ও ফুটার):
+const BRAND_DEFAULT={logo:'T',name:'খরচের খাতা',by:'by Tanvir',tag:'Your money, beautifully kept',foot:'Crafted with care by',sig:'Tanvir'};
 const LS=(()=>{try{localStorage.setItem('__t','1');localStorage.removeItem('__t');return localStorage}catch(e){const m={};return{getItem:k=>(k in m?m[k]:null),setItem:(k,v)=>{m[k]=String(v)},removeItem:k=>{delete m[k]}}}})();
 const API_CONFIG={
   // Production Backend URL Placeholder for Capacitor Android / Cross-Origin Hosting:
   // Replace 'https://YOUR-API-DOMAIN.onrender.com/api.php' with your live HTTPS backend URL (e.g. Render or cPanel) before building the Android APK.
   // On standard cPanel web/PWA hosting, getBaseUrl() automatically uses relative 'api.php'.
-  PRODUCTION_API_URL:'https://khoros-api.onrender.com/api.php',
+  PRODUCTION_API_URL:'https://YOUR-API-DOMAIN.onrender.com/api.php',
   DEFAULT_REMOTE_URL:'',
   isNativePlatform(){
     try{
@@ -1817,16 +1819,18 @@ function authView(mode,opts){
   const alertHtml=opts.alert?`<div class="auth-alert ${opts.alert.type}">${esc(opts.alert.text)}</div>`:'';
   const eyeSvg='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const tabsHtml=`<div class="auth-tabs"><button type="button" class="auth-tab ${mode==='login'?'on':''}" onclick="authView('login')">🔐 লগইন</button><button type="button" class="auth-tab ${mode==='register'?'on':''}" onclick="authView('register')">📝 নতুন অ্যাকাউন্ট</button></div>`;
+  const B={...BRAND_DEFAULT,...((CFG&&CFG.brand)||{})};
+  const bLogo=B.logo||((CFG&&CFG.welcome&&CFG.welcome.logo)||BRAND_DEFAULT.logo);
   let h='';
   if(mode==='login'){
     const preEmail=opts.email||(S&&S.email)||'';
-    h=`<div class="card auth"><div class="logo">T</div><h2>খরচের খাতা</h2><div class="sub">by Tanvir</div>${tabsHtml}${alertHtml}<input id="ae" type="email" placeholder="ইমেইল অ্যাড্রেস" autocomplete="email" value="${esc(preEmail)}"><div class="auth-field-wrap"><input id="ap" type="password" placeholder="পাসওয়ার্ড (৮+ অক্ষর)" autocomplete="current-password"><button type="button" class="auth-pw-btn" onclick="togglePwVis('ap',this)" aria-label="পাসওয়ার্ড দেখুন">${eyeSvg}</button></div><button class="p" style="width:100%;margin-top:6px" onclick="doLogin()">লগইন করুন</button><button type="button" class="auth-switch-link" onclick="authView('register')">অ্যাকাউন্ট নেই? নতুন অ্যাকাউন্ট তৈরি করুন →</button><p id="ax" class="mut" style="margin-top:10px"></p>${cfgBlock('login')}</div>`;
+    h=`<div class="card auth"><div class="logo" id="alg">${esc(bLogo)}</div><h2 id="atitle">${esc(B.name)}</h2><div class="sub" id="asub">${esc(B.by)}</div>${tabsHtml}${alertHtml}<input id="ae" type="email" placeholder="ইমেইল অ্যাড্রেস" autocomplete="email" value="${esc(preEmail)}"><div class="auth-field-wrap"><input id="ap" type="password" placeholder="পাসওয়ার্ড (৮+ অক্ষর)" autocomplete="current-password"><button type="button" class="auth-pw-btn" onclick="togglePwVis('ap',this)" aria-label="পাসওয়ার্ড দেখুন">${eyeSvg}</button></div><button class="p" style="width:100%;margin-top:6px" onclick="doLogin()">লগইন করুন</button><button type="button" class="auth-switch-link" onclick="authView('register')">অ্যাকাউন্ট নেই? নতুন অ্যাকাউন্ট তৈরি করুন →</button><p id="ax" class="mut" style="margin-top:10px"></p>${cfgBlock('login')}</div>`;
   }else{
     let badge='';
     if(regMode==='approval') badge='<div class="auth-alert warning">ℹ️ <b>অ্যাডমিন অনুমোদন আবশ্যক:</b> আবেদন জমা দেওয়ার পর অ্যাডমিন অনুমোদন করলে আপনি লগইন করতে পারবেন। অনুমোদনের পর আপনাকে ইমেইলে জানানো হবে।</div>';
     else if(regMode==='closed') badge='<div class="auth-alert danger">⚠️ <b>নিবন্ধন সাময়িকভাবে বন্ধ:</b> বর্তমানে নতুন অ্যাকাউন্ট তৈরি বন্ধ আছে। অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।</div>';
     else badge='<div class="auth-alert success">✓ নতুন অ্যাকাউন্ট তৈরি উন্মুক্ত। অ্যাকাউন্ট তৈরির পর লগইন করতে পারবেন।</div>';
-    h=`<div class="card auth"><div class="logo">T</div><h2>নতুন অ্যাকাউন্ট</h2><div class="sub">খরচের খাতায় স্বাগতম</div>${tabsHtml}${badge}${alertHtml}<div class="lb" style="text-align:left">পূর্ণ নাম (Full Name)</div><input id="rf-fn" type="text" placeholder="যেমন: তানভীর আহমেদ" autocomplete="name"><div class="lb" style="text-align:left">ডিসপ্লে নাম (Display Name)</div><input id="rf-dn" type="text" placeholder="অ্যাপে যে নাম দেখাবে (যেমন: তানভীর)" autocomplete="nickname"><div class="lb" style="text-align:left">ইমেইল অ্যাড্রেস (Email)</div><input id="rf-em" type="email" placeholder="name@example.com" autocomplete="email"><div class="lb" style="text-align:left">পাসওয়ার্ড (৮+ অক্ষর)</div><div class="auth-field-wrap"><input id="rf-pw" type="password" placeholder="কমপক্ষে ৮ অক্ষরের পাসওয়ার্ড" autocomplete="new-password"><button type="button" class="auth-pw-btn" onclick="togglePwVis('rf-pw',this)" aria-label="পাসওয়ার্ড দেখুন">${eyeSvg}</button></div><div class="lb" style="text-align:left">পাসওয়ার্ড নিশ্চিত করুন</div><div class="auth-field-wrap"><input id="rf-cp" type="password" placeholder="পাসওয়ার্ড পুনরায় লিখুন" autocomplete="new-password"><button type="button" class="auth-pw-btn" onclick="togglePwVis('rf-cp',this)" aria-label="পাসওয়ার্ড দেখুন">${eyeSvg}</button></div><button class="p" style="width:100%;margin-top:10px" onclick="doRegister()">${regMode==='closed'?'নিবন্ধন বর্তমানে বন্ধ':'অ্যাকাউন্ট তৈরি করুন'}</button><button type="button" class="auth-switch-link" onclick="authView('login')">ইতিমধ্যে অ্যাকাউন্ট আছে? লগইন করুন →</button><p id="ax-reg" class="mut" style="margin-top:10px;color:var(--bad)"></p>${cfgBlock('login')}</div>`;
+    h=`<div class="card auth"><div class="logo" id="alg">${esc(bLogo)}</div><h2>নতুন অ্যাকাউন্ট</h2><div class="sub" id="asub">${esc(B.name)} · ${esc(B.by)}</div>${tabsHtml}${badge}${alertHtml}<div class="lb" style="text-align:left">পূর্ণ নাম (Full Name)</div><input id="rf-fn" type="text" placeholder="যেমন: তানভীর আহমেদ" autocomplete="name"><div class="lb" style="text-align:left">ডিসপ্লে নাম (Display Name)</div><input id="rf-dn" type="text" placeholder="অ্যাপে যে নাম দেখাবে (যেমন: তানভীর)" autocomplete="nickname"><div class="lb" style="text-align:left">ইমেইল অ্যাড্রেস (Email)</div><input id="rf-em" type="email" placeholder="name@example.com" autocomplete="email"><div class="lb" style="text-align:left">পাসওয়ার্ড (৮+ অক্ষর)</div><div class="auth-field-wrap"><input id="rf-pw" type="password" placeholder="কমপক্ষে ৮ অক্ষরের পাসওয়ার্ড" autocomplete="new-password"><button type="button" class="auth-pw-btn" onclick="togglePwVis('rf-pw',this)" aria-label="পাসওয়ার্ড দেখুন">${eyeSvg}</button></div><div class="lb" style="text-align:left">পাসওয়ার্ড নিশ্চিত করুন</div><div class="auth-field-wrap"><input id="rf-cp" type="password" placeholder="পাসওয়ার্ড পুনরায় লিখুন" autocomplete="new-password"><button type="button" class="auth-pw-btn" onclick="togglePwVis('rf-cp',this)" aria-label="পাসওয়ার্ড দেখুন">${eyeSvg}</button></div><button class="p" style="width:100%;margin-top:10px" onclick="doRegister()">${regMode==='closed'?'নিবন্ধন বর্তমানে বন্ধ':'অ্যাকাউন্ট তৈরি করুন'}</button><button type="button" class="auth-switch-link" onclick="authView('login')">ইতিমধ্যে অ্যাকাউন্ট আছে? লগইন করুন →</button><p id="ax-reg" class="mut" style="margin-top:10px;color:var(--bad)"></p>${cfgBlock('login')}</div>`;
   }
   $('#v').innerHTML=h;
 }
@@ -2261,12 +2265,12 @@ const ntCard=n=>`<div class="nt nt-${ntType(n)}">${n.title?`<b>${esc(n.title)}</
 const cfgBlock=loc=>{const s=socRow(loc);if(loc==='settings')return s?'<div class="card"><h3>যুক্ত থাকুন</h3>'+s+'</div>':'';return ntList(loc).map(ntCard).join('')+s};
 function dismissN(id){SD.add(id);const o=disG();o[id]=Date.now();try{LS.setItem('kh_dis',JSON.stringify(o))}catch(e){}
 const n=((CFG&&CFG.notices)||[]).find(x=>x.id===id);if(n&&(n.freq||'always')==='hours')setTimeout(()=>{SD.delete(id);SCH.delete(id);applyCfg()},Math.min(gapMs(n),2e9)+300);applyCfg()}
-const WD={on:1,logo:'T',title:'খরচের খাতা',tag:'Your money, beautifully kept',greet:1,quotesOn:1,quotes:QT,btn:'শুরু করুন →',dur:5,bar:1,credit:1,creditText:'Designed & crafted with',creditName:'Tanvir',freq:'always',every:24,aud:'all'};
+const WD={on:1,logo:BRAND_DEFAULT.logo,title:BRAND_DEFAULT.name,tag:BRAND_DEFAULT.tag,greet:1,quotesOn:1,quotes:QT,btn:'শুরু করুন →',dur:5,bar:1,credit:1,creditText:'Designed & crafted with',creditName:BRAND_DEFAULT.sig,freq:'always',every:24,aud:'all'};
 let WSHOW,WQ,WT=0;
 function applyWelcome(){const sp=$('#sp');if(!sp)return;const W={...WD,...((CFG&&CFG.welcome)||{})};
 if(WSHOW===undefined){const pv=/[?&]pv=1/.test(location.search);WSHOW=pv||(!!W.on&&audOK(W)&&dueF('__welcome',W));if(WSHOW&&!pv)markSeen('__welcome')}
 if(!WSHOW){clearTimeout(window.spT);sp.style.display='none';return}
-$('#spl').textContent=W.logo||'T';$('#spt').textContent=W.title;$('#spg').textContent=W.tag;$('#spb').textContent=W.btn;
+$('#spl').textContent=W.logo||BRAND_DEFAULT.logo;$('#spt').textContent=W.title;$('#spg').textContent=W.tag;$('#spb').textContent=W.btn;
 $('#sw').textContent=W.greet?greet()+', '+NAME:'';
 const qs=(W.quotes&&W.quotes.length)?W.quotes:QT;if(WQ===undefined)WQ=Math.floor(Math.random()*1e6);$('#sq').textContent=W.quotesOn?qs[WQ%qs.length]:'';
 $('#spc').innerHTML=W.credit?`${esc(W.creditText)} <span style="color:#2DD4BF">♥</span> by<br><b>${esc(W.creditName)}</b>`:'';
@@ -2274,8 +2278,10 @@ const w=ntList('welcome');$('#spn').innerHTML=w.map(ntCard).join('');$('#sps').i
 const hold=w.some(n=>!(+n.secs)),d=Math.max(+W.dur||0,...w.map(n=>+n.secs||0));
 const pr=$('#sp .pr'),pi=$('#sp .pr i');pr.style.display=(W.bar&&d>0&&!hold)?'':'none';pi.style.animationDuration=d+'s';
 if(hold){clearTimeout(window.spT);sp.classList.add('hold')}else if(!WT){WT=1;clearTimeout(window.spT);if(d>0)window.spT=setTimeout(hideSp,d*1000)}}
-function applyBrand(){const B={name:'খরচের খাতা',by:'by Tanvir',foot:'Crafted with care by',sig:'Tanvir',...((CFG&&CFG.brand)||{})};
-$('#hb').textContent=B.name;$('#hs').textContent=B.by;$('#ftx').textContent=B.foot;$('#fsg').textContent=B.sig;document.title=B.name+' · '+B.sig}
+function applyBrand(){const B={...BRAND_DEFAULT,...((CFG&&CFG.brand)||{})};const bLogo=B.logo||((CFG&&CFG.welcome&&CFG.welcome.logo)||BRAND_DEFAULT.logo);
+if($('#hlg'))$('#hlg').textContent=bLogo;$('#hb').textContent=B.name;$('#hs').textContent=B.by;$('#ftx').textContent=B.foot;$('#fsg').textContent=B.sig;
+if($('#alg'))$('#alg').textContent=bLogo;if($('#atitle'))$('#atitle').textContent=B.name;if($('#asub'))$('#asub').textContent=(currentAuthMode==='register'?(B.name+' · '+B.by):B.by);
+document.title=B.name+' · '+B.sig}
 
 function compareSemver(v1,v2){
   const p1=String(v1||'').split('.').map(n=>parseInt(n,10)||0);

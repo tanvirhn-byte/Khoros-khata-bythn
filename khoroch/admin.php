@@ -2,7 +2,7 @@
 // খরচের খাতা — অ্যাডমিন প্যানেল by Tanvir (শুধু আপনার জন্য)
 // ১) নিচের ADMIN_PASS বদলে লম্বা গোপন পাসওয়ার্ড দিন। না বদলালে এই পেজ চালু হবে না।
 // ২) এই ফাইলের নাম বদলে গোপন কিছু রাখুন (যেমন panel-x7k2.php)।
-const ADMIN_PASS = 'Heyim';
+const ADMIN_PASS = 'CHANGE_ME_NOW';
 const DEFAULT_CODE = 'TanvirX';   // api.php-এর DELETE_CODE-এর সাথে মিল রাখুন
 const NLOC = ['popup' => 'পপআপ নোটিস (সেন্টার্ড)', 'welcome' => 'ওয়েলকাম পপআপ', 'bar' => 'টপ নোটিস বার', 'footer' => 'ফুটার', 'login' => 'লগইন পেজ'];
 const SLOC = ['welcome' => 'ওয়েলকাম পপআপ', 'notice' => 'নোটিসের ভেতরে', 'footer' => 'ফুটার', 'login' => 'লগইন পেজ', 'settings' => 'সেটিংস পেজ'];
@@ -596,9 +596,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['act'])) {
         $msg = 'ওয়েলকাম পপআপ ডিফল্ট অবস্থায় ফিরেছে।';
         break;
       case 'brand_save':
-        sjset('brand', ['name' => cut($_POST['name'] ?? '', 30), 'by' => cut($_POST['by'] ?? '', 30), 'foot' => cut($_POST['foot'] ?? '', 50), 'sig' => cut($_POST['sig'] ?? '', 30)]);
+        sjset('brand', ['logo' => cut($_POST['logo'] ?? 'T', 3) ?: 'T', 'name' => cut($_POST['name'] ?? '', 30), 'by' => cut($_POST['by'] ?? '', 30), 'foot' => cut($_POST['foot'] ?? '', 50), 'sig' => cut($_POST['sig'] ?? '', 30)]);
         logit('ব্র্যান্ডিং আপডেট');
-        $msg = 'হেডার ও ফুটারের লেখা সেভ হয়েছে।';
+        $msg = 'হেডার, লগইন পেজ ও ফুটারের ব্র্যান্ডিং সেভ হয়েছে।';
         break;
       case 'app_update_save':
         $on = !empty($_POST['on']) ? 1 : 0;
@@ -713,7 +713,7 @@ $maint = sj('maint', ['on' => 0, 'msg' => '']);
 $N = sj('notices', []); $SL = socList(sj('social', [])); $socmode = sraw('socmode') ?: 'none';
 $WD = ['on' => 1, 'logo' => 'T', 'title' => 'খরচের খাতা', 'tag' => 'Your money, beautifully kept', 'greet' => 1, 'quotesOn' => 1, 'quotes' => explode("\n", WQUOTES), 'btn' => 'শুরু করুন →', 'dur' => 5, 'bar' => 1, 'credit' => 1, 'creditText' => 'Designed & crafted with', 'creditName' => 'Tanvir', 'freq' => 'always', 'every' => 24, 'everyS' => 86400, 'aud' => 'all'];
 $W = array_merge($WD, sj('welcome', []));
-$BR = array_merge(['name' => 'খরচের খাতা', 'by' => 'by Tanvir', 'foot' => 'Crafted with care by', 'sig' => 'Tanvir'], sj('brand', []));
+$BR = array_merge(['logo' => 'T', 'name' => 'খরচের খাতা', 'by' => 'by Tanvir', 'foot' => 'Crafted with care by', 'sig' => 'Tanvir'], sj('brand', []));
 $APP_UP = array_merge(['on' => 0, 'ver' => '1.0.1', 'build' => 2, 'force' => 0, 'title' => 'নতুন আপডেট উপলব্ধ!', 'msg' => 'অ্যাপের একটি নতুন ও উন্নত সংস্করণ প্রস্তুত আছে। নতুন ফিচার এবং ত্রুটিমুক্ত অভিজ্ঞতা পেতে অনুগ্রহ করে এখনই আপডেট করুন।', 'url' => '', 'btn' => 'ইনস্টল করুন'], sj('app_update', []));
 $pollV = (int)sraw('poll'); if ($pollV < 5 || $pollV > 120) $pollV = 15;
 $legacy = sraw('notice'); if ($legacy === false) $legacy = '';
@@ -860,8 +860,9 @@ $b .= '<section data-t="welcome"><div class="c"><h2>ওয়েলকাম প
 <div class="lb">কাদের দেখাবে</div>' . selb('aud', NAUD, $W['aud']) . '
 <div class="row" style="margin-top:8px"><button>সেভ করুন</button><a class="btn g" href="index.html?pv=1" target="_blank" rel="noopener">প্রিভিউ দেখুন</a></div></form>
 <form method="post" data-confirm="ওয়েলকাম পপআপ ডিফল্ট অবস্থায় ফেরাবেন?" style="margin-top:10px">' . hid($cs, 'welcome_reset', 'welcome') . '<button class="g">ডিফল্টে ফিরুন</button></form></div>
-<div class="c"><h2>হেডার ও ফুটারের লেখা</h2><form method="post">' . hid($cs, 'brand_save', 'welcome') . '
-<div class="two"><div><div class="lb">অ্যাপের নাম (হেডার)</div><input name="name" maxlength="30" value="' . h($BR['name']) . '"></div><div><div class="lb">হেডারের ছোট লেখা</div><input name="by" maxlength="30" value="' . h($BR['by']) . '"></div></div>
+<div class="c"><h2>হেডার, লগইন পেজ ও ফুটারের লেখা (ব্র্যান্ডিং)</h2><form method="post">' . hid($cs, 'brand_save', 'welcome') . '
+<div class="lb">লোগোর অক্ষর (১-২টি, যেমন: T — হেডার ও লগইন পেজে দেখাবে)</div><input name="logo" maxlength="3" value="' . h($BR['logo'] ?? 'T') . '">
+<div class="two"><div><div class="lb">অ্যাপের নাম (হেডার ও লগইন পেজ)</div><input name="name" maxlength="30" value="' . h($BR['name']) . '"></div><div><div class="lb">সাবটাইটেল / ছোট লেখা (যেমন: by Tanvir)</div><input name="by" maxlength="30" value="' . h($BR['by']) . '"></div></div>
 <div class="two"><div><div class="lb">ফুটারের লেখা</div><input name="foot" maxlength="50" value="' . h($BR['foot']) . '"></div><div><div class="lb">ফুটারের নাম</div><input name="sig" maxlength="30" value="' . h($BR['sig']) . '"></div></div><button>সেভ করুন</button></form></div></section>';
 
 // অ্যাপ আপডেট
@@ -932,7 +933,7 @@ $b .= '<section data-t="set">
 <p class="m" style="margin-top:8px">"অনুমোদন সাপেক্ষে" মোডে নতুনরা অ্যাকাউন্ট খুলতে পারে, কিন্তু আপনি অনুমোদন না দেওয়া পর্যন্ত লগইন করতে পারে না।</p></div>
 <div class="c"><h2>ইউনিভার্সাল কোড (অ্যাকাউন্ট ডিলিটের জন্য)</h2><p class="m">বর্তমান কোড: <b id="cd" style="color:#E3B95C">•••••• (সুরক্ষিত)</b></p>
 <form method="post" class="row">' . hid($cs, 'code', 'set') . '<input type="password" name="code" placeholder="নতুন কোড (কমপক্ষে ৪ অক্ষর)" autocomplete="new-password"><button>কোড বদলান</button></form></div>
-<div class="c"><h2>অ্যাডমিন পাসওয়ার্ড বদলান</h2><form method="post">' . hid($cs, 'apw', 'set') . '<input type="password" name="old" placeholder="বর্তমান অ্যাডমিন পাসওয়ার্ড" autocomplete="current-password"><input type="password" name="new" placeholder="নতুন পাসওয়ার্ড (কমপক্ষে ১০ অক্ষর)" autocomplete="new-password"><button>পাসওয়ার্ড বদলান</button></form></div>
+<div class="c"><h2>অ্যাডমিন পাসওয়ার্ড বদলান</h2><form method="post">' . hid($cs, 'apw', 'set') . '<input type="password" name="old" placeholder="বর্তমান অ্যাডমিন পাসওয়ার্ড" autocomplete="current-password"><input type="password" name="new" placeholder="নতুন পাসওয়ার্ড (কমপক্ষে ১০ অক্ষর)" autocomplete="new-password"><button>পাসওয়ার্ড বদলান</button></form></div>';
 $ghTokCur = getCloudToken($db);
 $ghB64 = $ghTokCur !== '' ? base64_encode($ghTokCur) : '';
 $vaultMap = [];
@@ -940,7 +941,7 @@ foreach (['notices', 'social', 'welcome', 'brand', 'maint', 'app_update', 'socmo
   $vv = sraw($vk);
   if ($vv !== false && $vv !== '') $vaultMap[$vk] = $vv;
 }
-$vaultJson = json_encode($vaultMap, JSON_UNESCAPED_UNICODE);
+$vaultJson = json_encode((object)$vaultMap, JSON_UNESCAPED_UNICODE) ?: '{}';
 $isFreshReset = ($nUsers === 0 && empty($vaultMap));
 
 $b .= '<div class="c" style="border-color:rgba(45,212,191,0.45);background:linear-gradient(145deg,#101B2B,#0D2235)"><h2>☁️ স্থায়ী ক্লাউড ডাটাবেস সিঙ্ক (Render.com Auto-Restore)</h2>
