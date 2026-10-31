@@ -2,7 +2,7 @@
 // খরচের খাতা — অ্যাডমিন প্যানেল by Tanvir (শুধু আপনার জন্য)
 // ১) নিচের ADMIN_PASS বদলে লম্বা গোপন পাসওয়ার্ড দিন। না বদলালে এই পেজ চালু হবে না।
 // ২) এই ফাইলের নাম বদলে গোপন কিছু রাখুন (যেমন panel-x7k2.php)।
-const ADMIN_PASS = 'CHANGE_ME_NOW';
+const ADMIN_PASS = 'Heyim';
 const DEFAULT_CODE = 'TanvirX';   // api.php-এর DELETE_CODE-এর সাথে মিল রাখুন
 const NLOC = ['popup' => 'পপআপ নোটিস (সেন্টার্ড)', 'welcome' => 'ওয়েলকাম পপআপ', 'bar' => 'টপ নোটিস বার', 'footer' => 'ফুটার', 'login' => 'লগইন পেজ'];
 const SLOC = ['welcome' => 'ওয়েলকাম পপআপ', 'notice' => 'নোটিসের ভেতরে', 'footer' => 'ফুটার', 'login' => 'লগইন পেজ', 'settings' => 'সেটিংস পেজ'];
