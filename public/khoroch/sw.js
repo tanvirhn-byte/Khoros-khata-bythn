@@ -1,5 +1,5 @@
-// Khoroch er Khata - Progressive Web App Service Worker (Phase 12)
-const CACHE_NAME = 'kh-pwa-v12';
+// Khoroch er Khata - Progressive Web App Service Worker (Phase 13)
+const CACHE_NAME = 'kh-pwa-v13';
 
 // Essential application shell assets to precache
 const PRECACHE_ASSETS = [
@@ -13,7 +13,7 @@ const PRECACHE_ASSETS = [
   'apple-touch-icon.png'
 ];
 
-// Install event: cache app shell and optionally wait for skipWaiting
+// Install event: cache app shell and activate immediately
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
@@ -25,9 +25,7 @@ self.addEventListener('install', event => {
           })
         )
       );
-    }).then(() => {
-      // Allow new service worker to prepare without immediately hijacking active users
-    })
+    }).then(() => self.skipWaiting())
   );
 });
 

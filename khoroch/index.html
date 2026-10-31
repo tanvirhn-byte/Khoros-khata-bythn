@@ -1471,7 +1471,7 @@ const API_CONFIG={
   // Production Backend URL Placeholder for Capacitor Android / Cross-Origin Hosting:
   // Replace 'https://YOUR-API-DOMAIN.onrender.com/api.php' with your live HTTPS backend URL (e.g. Render or cPanel) before building the Android APK.
   // On standard cPanel web/PWA hosting, getBaseUrl() automatically uses relative 'api.php'.
-  PRODUCTION_API_URL:'https://khoros-api.onrender.com/api.php',
+  PRODUCTION_API_URL:'https://YOUR-API-DOMAIN.onrender.com/api.php',
   DEFAULT_REMOTE_URL:'',
   isNativePlatform(){
     try{
@@ -1487,7 +1487,7 @@ const API_CONFIG={
   isPlaceholderUrl(u){
     if(!u||typeof u!=='string')return true;
     const s=u.trim().toLowerCase();
-    return !s||s.includes('your-production-domain.com')||s.includes('yourdomain.com')||s.includes('example.com');
+    return !s||s.includes('your-api-domain')||s.includes('your-production-domain.com')||s.includes('yourdomain.com')||s.includes('example.com');
   },
   validateRemoteUrl(u){
     const s=String(u||'').trim();
@@ -2131,11 +2131,14 @@ try{let u;try{u=apiUrl('ping')}catch(_){return}const r=await fetchT(u,{method:'P
 if(r.status==401)return logout(true);if(r.status==403){const d=await r.json().catch(()=>null);if(d&&(d.error==='invalid_token'||d.error==='token_expired'||d.error==='account_disabled'))return logout(true)}if(!r.ok)throw 0;const d=await r.json();
 if(d&&typeof d.rev==='number'){SY.fail=0;if(d.rev!==S.since){IDLE=0;return sync()}IDLE++;if(SY.err){SY.err='';stat('সিঙ্ক হয়েছে ✓')}dot('ok')}}
 catch(e){SY.fail++;if(SY.fail>=2){SY.err='ইন্টারনেট নেই';dot('err');stat('সিঙ্ক হয়নি — '+SY.err)}}}
-let pingT,lastTick=Date.now(),lastCfgLoad=0,lastBgAt=0;
+let pingT,lastTick=Date.now(),lastCfgLoad=0,lastBgAt=0,lastReEnterAt=0;
 function onAppBackground(){lastBgAt=Date.now();flush()}
-function onAppReEnter(){
+function onAppReEnter(force){
+  const now=Date.now();
+  if(now-lastReEnterAt<350)return;
+  lastReEnterAt=now;
   IDLE=0;
-  if(lastBgAt>0&&(Date.now()-lastBgAt>=1200)){
+  if(force===true||lastBgAt>0){
     sessionAckedPopups.clear();
     SD.clear();
     SS.clear();
@@ -2144,8 +2147,11 @@ function onAppReEnter(){
   lastBgAt=0;
   applyCfg();
   loadCfg();
+  setTimeout(checkAdminPopupNotices,250);
   sync();
 }
+window.onAppBackground=onAppBackground;
+window.onAppReEnter=onAppReEnter;
 async function pollTick(){const gap=Date.now()-lastTick;lastTick=Date.now();if(!document.hidden&&Date.now()-lastCfgLoad>=25000){loadCfg()}else{checkAdminPopupNotices()}if(gap>pollSec()*8000+10000){IDLE=0;await sync()}else await ping()}
 function pingLoop(){clearTimeout(pingT);const m=(document.hidden?4:1)*(IDLE>40?4:IDLE>8?2:1);pingT=setTimeout(async()=>{try{await pollTick()}catch(e){}pingLoop()},pollSec()*1000*m)}
 // ট্যাব বন্ধ বা লুকানোর মুহূর্তে অপেক্ষমাণ পরিবর্তন পাঠিয়ে দেওয়া
@@ -2153,10 +2159,10 @@ function flush(){if(!tok||!pend())return;try{let u;try{u=apiUrl('sync')}catch(_)
 const b=JSON.stringify({token:tok,since:S.since||0,parents:dr(S.parents),cats:dr(S.cats),exps:dr(S.exps),prefs:dr(S.prefs||[])});let ok=false;
 try{if(navigator.sendBeacon)ok=navigator.sendBeacon(u,new Blob([b],{type:'application/json'}))}catch(e){}
 if(!ok)fetch(u,{method:'POST',keepalive:true,headers:authHeaders(),body:b}).catch(()=>{})}catch(e){}}
-document.addEventListener('visibilitychange',()=>{if(document.hidden)onAppBackground();else onAppReEnter()});addEventListener('pagehide',onAppBackground);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)onAppBackground();else onAppReEnter(true)});addEventListener('pagehide',onAppBackground);document.addEventListener('pause',onAppBackground);
 // একই ব্রাউজারের এক ট্যাবে বদলালে অন্য ট্যাবেও সঙ্গে সঙ্গে
 addEventListener('storage',e=>{if(e.key==='kh'&&e.newValue){try{S=JSON.parse(e.newValue);go()}catch(x){}}if(e.key==='kh_t'&&!e.newValue&&tok){tok=null;go()}});
-addEventListener('online',()=>{IDLE=0;showStatusPopup('online','ইন্টারনেট সংযোগ পুনরুদ্ধার','অনলাইন সংযোগ ফিরে এসেছে। অপেক্ষমাণ সব তথ্য সিঙ্ক করা হচ্ছে…',3000);loadCfg();sync()});addEventListener('offline',()=>{SY.err='ইন্টারনেট নেই';dot('err');stat('সিঙ্ক হয়নি — ইন্টারনেট নেই');showStatusPopup('offline','ইন্টারনেট বিচ্ছিন্ন — অফলাইন মোড','আপনি এখন অফলাইন মোডে আছেন। সব খরচ ফোনে নিরাপদে জমা থাকবে।',3500)});document.addEventListener('resume',onAppReEnter);addEventListener('focus',()=>{IDLE=0;checkAdminPopupNotices();sync()});addEventListener('pageshow',e=>{if(e&&e.persisted)onAppReEnter();else sync()});
+addEventListener('online',()=>{IDLE=0;showStatusPopup('online','ইন্টারনেট সংযোগ পুনরুদ্ধার','অনলাইন সংযোগ ফিরে এসেছে। অপেক্ষমাণ সব তথ্য সিঙ্ক করা হচ্ছে…',3000);loadCfg();sync()});addEventListener('offline',()=>{SY.err='ইন্টারনেট নেই';dot('err');stat('সিঙ্ক হয়নি — ইন্টারনেট নেই');showStatusPopup('offline','ইন্টারনেট বিচ্ছিন্ন — অফলাইন মোড','আপনি এখন অফলাইন মোডে আছেন। সব খরচ ফোনে নিরাপদে জমা থাকবে।',3500)});document.addEventListener('resume',()=>onAppReEnter(true));addEventListener('focus',()=>{IDLE=0;checkAdminPopupNotices();sync()});addEventListener('pageshow',e=>{if(e&&e.persisted)onAppReEnter(true);else sync()});
 let deferredInstallPrompt = null;
 let swRegistration = null;
 let swReloading = false;
