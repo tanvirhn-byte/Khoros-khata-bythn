@@ -728,7 +728,7 @@ $cs = h($_SESSION['csrf']);
 
 function nform($n, $cs) {
   global $SL;
-  $loc = $n['loc'] ?? ['welcome'];
+  $loc = $n['loc'] ?? ['popup', 'welcome'];
   $o = '<form method="post">' . hid($cs, 'notice_save', 'notice') . '<input type="hidden" name="nid" value="' . h($n['id'] ?? '') . '">';
   $o .= '<input name="title" maxlength="80" placeholder="শিরোনাম" value="' . h($n['title'] ?? '') . '"><textarea name="msg" rows="3" maxlength="400" placeholder="বার্তা লিখুন">' . h($n['msg'] ?? '') . '</textarea>';
   $o .= '<div class="two"><input name="link" placeholder="লিংক (ঐচ্ছিক)" value="' . h($n['link'] ?? '') . '"><input name="btn" maxlength="30" placeholder="বোতামের লেখা (যেমন: বিস্তারিত)" value="' . h($n['btn'] ?? '') . '"></div>';

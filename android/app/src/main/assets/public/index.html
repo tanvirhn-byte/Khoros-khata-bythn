@@ -1591,11 +1591,24 @@ function checkPendingPopup() {
 }
 
 let currentAdmNotice = null;
+let admNoticeTimer = null;
+let admPopupReTimer = null;
+const sessionAckedPopups = new Set();
+function gapMs(n) {
+  return (+n.everyS > 0 ? +n.everyS : Math.max(1, +n.every || 24) * 3600) * 1000;
+}
 function getAckNotices() {
   try { return JSON.parse(LS.getItem('kh_ack_notices')) || {}; } catch(e) { return {}; }
 }
 function noticeSig(n) {
-  return String(n.id) + '|' + String(n.title || '') + '|' + String(n.msg || '') + '|' + String(n.link || '') + '|' + String(n.type || '');
+  return String(n.id) + '|' + String(n.title || '') + '|' + String(n.msg || '') + '|' + String(n.link || '') + '|' + String(n.type || '') + '|' + String(n.freq || 'always') + '|' + String(n.everyS || n.every || '');
+}
+function scheduleNextPopupCheck(ms) {
+  const delay = Math.max(400, Math.min(ms, 2147483000));
+  clearTimeout(admPopupReTimer);
+  admPopupReTimer = setTimeout(() => {
+    checkAdminPopupNotices();
+  }, delay);
 }
 function checkAdminPopupNotices() {
   const modal = $('#adm-modal');
@@ -1604,24 +1617,53 @@ function checkAdminPopupNotices() {
   if (currentAdmNotice) {
     const stillActive = notices.some(n => n.id === currentAdmNotice.id && (n.loc || []).some(l => l === 'popup' || l === 'welcome' || l === 'all') && audOK(n));
     if (!stillActive) {
+      clearTimeout(admNoticeTimer);
       modal.style.display = 'none';
       currentAdmNotice = null;
+    } else if (modal.style.display === 'flex') {
+      return;
     }
   }
-  const isSp = $('#sp') && $('#sp').style.display !== 'none';
+  const spEl = $('#sp');
+  const isSp = spEl && spEl.style.display !== 'none' && !spEl.classList.contains('out');
   if (isSp) return;
 
   const ackMap = getAckNotices();
+  let minNextWaitMs = Infinity;
+  const now = Date.now();
   const eligible = notices.filter(n => {
     const locs = n.loc || [];
     const isPopupLoc = locs.includes('popup') || (locs.includes('welcome') && !isSp);
     if (!isPopupLoc) return false;
     if (!audOK(n)) return false;
     const sig = noticeSig(n);
+    const f = n.freq || 'always';
+    if (f === 'always') {
+      return !sessionAckedPopups.has(sig);
+    }
     const ack = ackMap[n.id];
-    if (ack && ack.sig === sig) return false;
-    return true;
+    if (f === 'once') {
+      if (sessionAckedPopups.has(sig)) return false;
+      if (ack && ack.sig === sig) return false;
+      return true;
+    }
+    if (f === 'hours') {
+      if (ack && ack.sig === sig && ack.seenAt) {
+        const elapsed = now - (+ack.seenAt || 0);
+        const gap = gapMs(n);
+        if (elapsed < gap) {
+          const rem = gap - elapsed + 250;
+          if (rem < minNextWaitMs) minNextWaitMs = rem;
+          return false;
+        }
+      }
+      return true;
+    }
+    return !sessionAckedPopups.has(sig);
   });
+  if (minNextWaitMs < Infinity) {
+    scheduleNextPopupCheck(minNextWaitMs);
+  }
   if (!eligible.length) return;
   eligible.sort((a, b) => (a.pri || 10) - (b.pri || 10));
   displayAdminNoticeModal(eligible[0]);
@@ -1653,13 +1695,33 @@ function displayAdminNoticeModal(n) {
   }
   if (sWrap) { sWrap.innerHTML = (typeof ntSoc === 'function' ? ntSoc(n) : '') || ''; }
   modal.style.display = 'flex';
+  clearTimeout(admNoticeTimer);
+  if (+n.secs > 0) {
+    admNoticeTimer = setTimeout(() => {
+      if (currentAdmNotice && currentAdmNotice.id === n.id) {
+        ackCurrentAdminNotice();
+      }
+    }, +n.secs * 1000);
+  }
 }
 
 function ackCurrentAdminNotice() {
+  clearTimeout(admNoticeTimer);
   if (currentAdmNotice) {
+    const n = currentAdmNotice;
+    const sig = noticeSig(n);
+    const f = n.freq || 'always';
+    sessionAckedPopups.add(sig);
     const ackMap = getAckNotices();
-    ackMap[currentAdmNotice.id] = { seenAt: Date.now(), sig: noticeSig(currentAdmNotice) };
+    if (f === 'always') {
+      delete ackMap[n.id];
+    } else {
+      ackMap[n.id] = { seenAt: Date.now(), sig: sig, freq: f };
+    }
     try { LS.setItem('kh_ack_notices', JSON.stringify(ackMap)); } catch(e) {}
+    if (f === 'hours') {
+      scheduleNextPopupCheck(gapMs(n) + 250);
+    }
     currentAdmNotice = null;
   }
   const modal = $('#adm-modal');
@@ -1951,11 +2013,12 @@ function getAcctVault(em){const m=getVaultMap(),k=(em||(S&&S.email)||'').trim().
 async function chgPass(){const v=await ask({icon:'🔑',title:'পাসওয়ার্ড পরিবর্তন',sub:'অ্যাকাউন্টের লগইন পাসওয়ার্ড',fields:[{label:'বর্তমান পাসওয়ার্ড',type:'password'},{label:'নতুন পাসওয়ার্ড (৮+ অক্ষর)',type:'password'},{label:'নতুন পাসওয়ার্ড আবার',type:'password'}],ok:'পরিবর্তন করুন'});if(v===null)return;if(v[1].length<8)return toast('নতুন পাসওয়ার্ড ৮+ অক্ষরের হতে হবে');if(v[1]!==v[2])return toast('নতুন পাসওয়ার্ড দুটি মিলছে না');try{let u='api.php?a=passwd';try{u=apiUrl('passwd')}catch(_){}const r=await fetch(u,{method:'POST',headers:authHeaders(),body:JSON.stringify({token:tok,old:v[0],new:v[1]})});const d=await r.json().catch(()=>null);if(r.status==401){logout(true);return toast('লগইন মেয়াদ শেষ হয়েছে');}if(r.ok&&S&&S.email)saveAcctVault(S.email,v[1],'',NAME);toast(r.ok?'পাসওয়ার্ড পরিবর্তন হয়েছে ✓':((d&&d.error)||'সমস্যা হয়েছে'))}catch(e){toast('ইন্টারনেট দরকার')}}
 const greet=()=>{const h=new Date().getHours();return h<5?'শুভ রাত্রি':h<12?'শুভ সকাল':h<17?'শুভ দুপুর':h<19?'শুভ বিকাল':'শুভ সন্ধ্যা'};
 const QT=['আজকের ছোট হিসাব, আগামীর বড় নিশ্চিন্ততা।','প্রতিটি টাকার একটা গল্প থাকে — আপনি শুধু লিখে রাখুন।','গুছিয়ে রাখা হিসাবই সবচেয়ে বড় সঞ্চয়।','যা মাপা হয়, তা-ই ভালো হয়।','খরচে হিসাব, জীবনে স্বস্তি।'];
-function hideSp(){const e=$('#sp');e.classList.add('out');setTimeout(()=>{e.style.display='none';try{checkAdminPopupNotices()}catch(_){}},700)}
+let spClosed=false;
+function hideSp(){if(spClosed)return;spClosed=true;clearTimeout(window.spT);if(WSHOW&&!/[?&]pv=1/.test(location.search))markSeen('__welcome');const e=$('#sp');if(e){e.classList.add('out');setTimeout(()=>{e.style.display='none';try{checkAdminPopupNotices()}catch(_){}},700)}else{try{checkAdminPopupNotices()}catch(_){}}}
 $('#sq').textContent=QT[Math.floor(Math.random()*QT.length)];$('#sw').textContent=greet()+', '+NAME;window.spT=setTimeout(hideSp,4800);
 let hid=0;document.addEventListener('visibilitychange',()=>{if(document.hidden)hid=Date.now();else if(LOCK&&PIN&&Date.now()-hid>=LOCKT*1000){unlocked=false;go()}});
 async function auth(k){try{let u;try{u=apiUrl(k)}catch(urlErr){$('#ax').textContent='API URL কনফিগার করা নেই। অনুগ্রহ করে সঠিক ব্যাকএন্ড URL দিন।';return}const emIn=($('#ae').value||'').trim().toLowerCase(),pwIn=$('#ap').value||'';const r=await fetchT(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:emIn,password:pwIn,vault:getAcctVault(emIn)})});let d=null;try{d=await r.json()}catch(_){}if(!r.ok||!d||!d.token)return $('#ax').textContent=(d&&d.error)||(r.status===403?'অননুমোদিত অরিজিন (CORS)':r.status===404?'API পাওয়া যায়নি (কোড 404)':r.status>=500?'সার্ভার ত্রুটি (কোড '+r.status+')':'সার্ভার ঠিকমতো উত্তর দেয়নি (Invalid JSON)');
-tok=d.token;LS.setItem('kh_t',tok);saveAcctVault(emIn,pwIn,d.fullname||'',d.name||NAME||'');if(S.email!==emIn){S={sym:'৳',parents:[],cats:[],exps:[],since:0,email:emIn};DEFG='';NAME=d.name||'Tanvir';try{LS.removeItem('kh_defg');if(d.name)LS.setItem('kh_name',d.name);else LS.removeItem('kh_name')}catch(e){}}else{S.since=0;if(d.name){NAME=d.name;try{LS.setItem('kh_name',d.name)}catch(e){}}}S.email=emIn;if(d.name)setPref('name',d.name);cur=null;FIRST=true;persist();try{await sync()}catch(syncErr){console.warn('Initial sync warning:',syncErr)}go()}catch(e){if(e&&e.message&&e.message.includes('API_URL_NOT_CONFIGURED')){$('#ax').textContent='API URL কনফিগার করা নেই। অনুগ্রহ করে সঠিক ব্যাকএন্ড URL দিন।'}else if(e&&e.message==='timeout'){$('#ax').textContent='সার্ভার সাড়া দিচ্ছে না (টাইমআউট)'}else{$('#ax').textContent='সার্ভারে যোগাযোগ করা যাচ্ছে না'}}}
+tok=d.token;LS.setItem('kh_t',tok);saveAcctVault(emIn,pwIn,d.fullname||'',d.name||NAME||'');if(S.email!==emIn){S={sym:'৳',parents:[],cats:[],exps:[],since:0,email:emIn};DEFG='';NAME=d.name||'Tanvir';try{LS.removeItem('kh_defg');if(d.name)LS.setItem('kh_name',d.name);else LS.removeItem('kh_name')}catch(e){}}else{S.since=0;if(d.name){NAME=d.name;try{LS.setItem('kh_name',d.name)}catch(e){}}}S.email=emIn;if(d.name)setPref('name',d.name);cur=null;FIRST=true;persist();try{await sync()}catch(syncErr){console.warn('Initial sync warning:',syncErr)}go();applyCfg();checkAdminPopupNotices()}catch(e){if(e&&e.message&&e.message.includes('API_URL_NOT_CONFIGURED')){$('#ax').textContent='API URL কনফিগার করা নেই। অনুগ্রহ করে সঠিক ব্যাকএন্ড URL দিন।'}else if(e&&e.message==='timeout'){$('#ax').textContent='সার্ভার সাড়া দিচ্ছে না (টাইমআউট)'}else{$('#ax').textContent='সার্ভারে যোগাযোগ করা যাচ্ছে না'}}}
 async function logout(f){
   if(!f){
     await sync();
@@ -2068,18 +2131,32 @@ try{let u;try{u=apiUrl('ping')}catch(_){return}const r=await fetchT(u,{method:'P
 if(r.status==401)return logout(true);if(r.status==403){const d=await r.json().catch(()=>null);if(d&&(d.error==='invalid_token'||d.error==='token_expired'||d.error==='account_disabled'))return logout(true)}if(!r.ok)throw 0;const d=await r.json();
 if(d&&typeof d.rev==='number'){SY.fail=0;if(d.rev!==S.since){IDLE=0;return sync()}IDLE++;if(SY.err){SY.err='';stat('সিঙ্ক হয়েছে ✓')}dot('ok')}}
 catch(e){SY.fail++;if(SY.fail>=2){SY.err='ইন্টারনেট নেই';dot('err');stat('সিঙ্ক হয়নি — '+SY.err)}}}
-let pingT,lastTick=Date.now();
-async function pollTick(){const gap=Date.now()-lastTick;lastTick=Date.now();if(gap>pollSec()*8000+10000){IDLE=0;await sync()}else await ping()}
+let pingT,lastTick=Date.now(),lastCfgLoad=0,lastBgAt=0;
+function onAppBackground(){lastBgAt=Date.now();flush()}
+function onAppReEnter(){
+  IDLE=0;
+  if(lastBgAt>0&&(Date.now()-lastBgAt>=1200)){
+    sessionAckedPopups.clear();
+    SD.clear();
+    SS.clear();
+    SCH.clear();
+  }
+  lastBgAt=0;
+  applyCfg();
+  loadCfg();
+  sync();
+}
+async function pollTick(){const gap=Date.now()-lastTick;lastTick=Date.now();if(!document.hidden&&Date.now()-lastCfgLoad>=25000){loadCfg()}else{checkAdminPopupNotices()}if(gap>pollSec()*8000+10000){IDLE=0;await sync()}else await ping()}
 function pingLoop(){clearTimeout(pingT);const m=(document.hidden?4:1)*(IDLE>40?4:IDLE>8?2:1);pingT=setTimeout(async()=>{try{await pollTick()}catch(e){}pingLoop()},pollSec()*1000*m)}
 // ট্যাব বন্ধ বা লুকানোর মুহূর্তে অপেক্ষমাণ পরিবর্তন পাঠিয়ে দেওয়া
 function flush(){if(!tok||!pend())return;try{let u;try{u=apiUrl('sync')}catch(_){return}const dr=a=>a.filter(x=>x._d).slice(0,120).map(x=>{const{_d,...r}=x;return r});
 const b=JSON.stringify({token:tok,since:S.since||0,parents:dr(S.parents),cats:dr(S.cats),exps:dr(S.exps),prefs:dr(S.prefs||[])});let ok=false;
 try{if(navigator.sendBeacon)ok=navigator.sendBeacon(u,new Blob([b],{type:'application/json'}))}catch(e){}
 if(!ok)fetch(u,{method:'POST',keepalive:true,headers:authHeaders(),body:b}).catch(()=>{})}catch(e){}}
-document.addEventListener('visibilitychange',()=>{if(document.hidden)flush()});addEventListener('pagehide',flush);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)onAppBackground();else onAppReEnter()});addEventListener('pagehide',onAppBackground);
 // একই ব্রাউজারের এক ট্যাবে বদলালে অন্য ট্যাবেও সঙ্গে সঙ্গে
 addEventListener('storage',e=>{if(e.key==='kh'&&e.newValue){try{S=JSON.parse(e.newValue);go()}catch(x){}}if(e.key==='kh_t'&&!e.newValue&&tok){tok=null;go()}});
-addEventListener('online',()=>{IDLE=0;showStatusPopup('online','ইন্টারনেট সংযোগ পুনরুদ্ধার','অনলাইন সংযোগ ফিরে এসেছে। অপেক্ষমাণ সব তথ্য সিঙ্ক করা হচ্ছে…',3000);sync()});addEventListener('offline',()=>{SY.err='ইন্টারনেট নেই';dot('err');stat('সিঙ্ক হয়নি — ইন্টারনেট নেই');showStatusPopup('offline','ইন্টারনেট বিচ্ছিন্ন — অফলাইন মোড','আপনি এখন অফলাইন মোডে আছেন। সব খরচ ফোনে নিরাপদে জমা থাকবে।',3500)});document.addEventListener('resume',()=>{IDLE=0;sync()});addEventListener('focus',()=>{IDLE=0;sync()});addEventListener('pageshow',()=>sync());document.addEventListener('visibilitychange',()=>{if(!document.hidden){IDLE=0;sync()}});
+addEventListener('online',()=>{IDLE=0;showStatusPopup('online','ইন্টারনেট সংযোগ পুনরুদ্ধার','অনলাইন সংযোগ ফিরে এসেছে। অপেক্ষমাণ সব তথ্য সিঙ্ক করা হচ্ছে…',3000);loadCfg();sync()});addEventListener('offline',()=>{SY.err='ইন্টারনেট নেই';dot('err');stat('সিঙ্ক হয়নি — ইন্টারনেট নেই');showStatusPopup('offline','ইন্টারনেট বিচ্ছিন্ন — অফলাইন মোড','আপনি এখন অফলাইন মোডে আছেন। সব খরচ ফোনে নিরাপদে জমা থাকবে।',3500)});document.addEventListener('resume',onAppReEnter);addEventListener('focus',()=>{IDLE=0;checkAdminPopupNotices();sync()});addEventListener('pageshow',e=>{if(e&&e.persisted)onAppReEnter();else sync()});
 let deferredInstallPrompt = null;
 let swRegistration = null;
 let swReloading = false;
@@ -2247,15 +2324,19 @@ let CFG=null;try{CFG=JSON.parse(LS.getItem('kh_cfg'))}catch(e){}
 let VID=LS.getItem('kh_vid');if(!VID){VID=Math.random().toString(36).slice(2,10)+Date.now().toString(36);try{LS.setItem('kh_vid',VID)}catch(e){}}
 const okU=u=>/^https?:\/\//i.test(u||'');const okS=u=>/^(https?:\/\/|mailto:|tel:)/i.test(u||'');
 const seenG=()=>{try{return JSON.parse(LS.getItem('kh_seen'))||{}}catch(e){return{}}};
-const markSeen=id=>{const o=seenG();o[id]=Date.now();try{LS.setItem('kh_seen',JSON.stringify(o))}catch(e){}};
-const dueF=(id,n)=>{const f=n.freq||'always';if(f==='always')return true;const t=seenG()[id];if(!t)return true;if(f==='once')return false;const g=(+n.everyS>0?+n.everyS:Math.max(1,+n.every||24)*3600)*1000;return Date.now()-t>=g};
-const SS=new Set(),SD=new Set(),SCH=new Set();
+const markSeen=(id,sig)=>{const o=seenG();o[id]=sig?{t:Date.now(),sig:sig}:Date.now();try{LS.setItem('kh_seen',JSON.stringify(o))}catch(e){}};
+const dueF=(id,n)=>{const f=n.freq||'always';if(f==='always')return true;const raw=seenG()[id],sig=n.id?noticeSig(n):'';const t=(raw&&typeof raw==='object')?((!sig||raw.sig===sig)?(+raw.t||0):0):(+raw||0);if(!t)return true;if(f==='once')return false;return Date.now()-t>=gapMs(n)};
+const SS=new Set(),SD=new Set(),SCH=new Set(),barTimers={};
+function scheduleBarReCheck(id,ms){clearTimeout(barTimers[id]);barTimers[id]=setTimeout(()=>{SD.delete(id);SS.delete(id);SCH.delete(id);applyCfg()},Math.max(400,Math.min(ms,2147483000)))}
 const audOK=n=>n.aud==='in'?!!tok:n.aud==='out'?!tok:true;
 const disG=()=>{try{return JSON.parse(LS.getItem('kh_dis'))||{}}catch(e){return{}}};
-const gapMs=n=>(+n.everyS>0?+n.everyS:Math.max(1,+n.every||24)*3600)*1000;
 function vis(n,loc){if(!audOK(n))return false;
-if(loc==='bar'){if(SD.has(n.id))return false;const f=n.freq||'always',t=disG()[n.id];if(t){if(f==='once')return false;if(f==='hours'&&Date.now()-t<gapMs(n))return false}return true}
-if(SS.has(n.id))return true;if(dueF(n.id,n)){SS.add(n.id);markSeen(n.id);return true}return false}
+const f=n.freq||'always',sig=noticeSig(n);
+if(loc==='bar'){if(SD.has(n.id))return false;if(f==='always')return true;const raw=disG()[n.id],t=(raw&&typeof raw==='object')?(raw.sig===sig?(+raw.t||0):0):(+raw||0);if(t>0){if(f==='once')return false;if(f==='hours'){const el=Date.now()-t,g=gapMs(n);if(el<g){scheduleBarReCheck(n.id,g-el+250);return false}}}return true}
+if(SS.has(n.id))return true;
+if(dueF(n.id,n)){SS.add(n.id);markSeen(n.id,sig);if(f==='hours')scheduleBarReCheck(n.id,gapMs(n)+250);return true}
+if(f==='hours'){const rawS=seenG()[n.id],ts=(rawS&&typeof rawS==='object')?(rawS.sig===sig?(+rawS.t||0):0):(+rawS||0);if(ts>0){const el=Date.now()-ts,g=gapMs(n);if(el<g)scheduleBarReCheck(n.id,g-el+250)}}
+return false}
 const socItems=l=>l.length?'<div class="soc">'+l.map(s=>`<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(s.label||SI[s.k][0])}" title="${esc(s.label||SI[s.k][0])}" style="background:${SI[s.k][1]}">${SI[s.k][2]}</a>`).join('')+'</div>':'';
 const socRow=loc=>socItems(((CFG&&CFG.social)||[]).filter(s=>(s.loc||[]).includes(loc)&&okS(s.url)&&SI[s.k]));
 const ntList=loc=>((CFG&&CFG.notices)||[]).filter(n=>(n.loc||[]).includes(loc)&&vis(n,loc));
@@ -2263,13 +2344,13 @@ const ntType=n=>['info','success','warning','danger'].includes(n.type)?n.type:'i
 const ntSoc=n=>{const all=(CFG&&CFG.social)||[];if((n.socs||[]).length)return socItems(n.socs.map(id=>all.find(s=>s.id===id)).filter(s=>s&&okS(s.url)&&SI[s.k]));return((CFG&&CFG.socmode)||'none')==='all'?socRow('notice'):''};
 const ntCard=n=>`<div class="nt nt-${ntType(n)}">${n.title?`<b>${esc(n.title)}</b>`:''}<div>${esc(n.msg)}</div>${okU(n.link)?`<a class="ntb" href="${esc(n.link)}" target="_blank" rel="noopener noreferrer">${esc(n.btn||'বিস্তারিত')} →</a>`:''}${ntSoc(n)}</div>`;
 const cfgBlock=loc=>{const s=socRow(loc);if(loc==='settings')return s?'<div class="card"><h3>যুক্ত থাকুন</h3>'+s+'</div>':'';return ntList(loc).map(ntCard).join('')+s};
-function dismissN(id){SD.add(id);const o=disG();o[id]=Date.now();try{LS.setItem('kh_dis',JSON.stringify(o))}catch(e){}
-const n=((CFG&&CFG.notices)||[]).find(x=>x.id===id);if(n&&(n.freq||'always')==='hours')setTimeout(()=>{SD.delete(id);SCH.delete(id);applyCfg()},Math.min(gapMs(n),2e9)+300);applyCfg()}
+function dismissN(id){SD.add(id);const n=((CFG&&CFG.notices)||[]).find(x=>x.id===id);const f=(n&&n.freq)||'always';const o=disG();if(f==='always'){delete o[id]}else{o[id]={t:Date.now(),sig:n?noticeSig(n):''}}try{LS.setItem('kh_dis',JSON.stringify(o))}catch(e){}
+if(n&&f==='hours')scheduleBarReCheck(id,gapMs(n)+300);applyCfg()}
 const WD={on:1,logo:BRAND_DEFAULT.logo,title:BRAND_DEFAULT.name,tag:BRAND_DEFAULT.tag,greet:1,quotesOn:1,quotes:QT,btn:'শুরু করুন →',dur:5,bar:1,credit:1,creditText:'Designed & crafted with',creditName:BRAND_DEFAULT.sig,freq:'always',every:24,aud:'all'};
 let WSHOW,WQ,WT=0;
-function applyWelcome(){const sp=$('#sp');if(!sp)return;const W={...WD,...((CFG&&CFG.welcome)||{})};
-if(WSHOW===undefined){const pv=/[?&]pv=1/.test(location.search);WSHOW=pv||(!!W.on&&audOK(W)&&dueF('__welcome',W));if(WSHOW&&!pv)markSeen('__welcome')}
-if(!WSHOW){clearTimeout(window.spT);sp.style.display='none';return}
+function applyWelcome(fresh){const sp=$('#sp');if(!sp||spClosed)return;const W={...WD,...((CFG&&CFG.welcome)||{})};
+if(WSHOW===undefined||fresh===true){const pv=/[?&]pv=1/.test(location.search);WSHOW=pv||(!!W.on&&audOK(W)&&dueF('__welcome',W))}
+if(!WSHOW){spClosed=true;clearTimeout(window.spT);sp.style.display='none';return}
 $('#spl').textContent=W.logo||BRAND_DEFAULT.logo;$('#spt').textContent=W.title;$('#spg').textContent=W.tag;$('#spb').textContent=W.btn;
 $('#sw').textContent=W.greet?greet()+', '+NAME:'';
 const qs=(W.quotes&&W.quotes.length)?W.quotes:QT;if(WQ===undefined)WQ=Math.floor(Math.random()*1e6);$('#sq').textContent=W.quotesOn?qs[WQ%qs.length]:'';
@@ -2361,10 +2442,10 @@ function applyCfg(fresh){
 const bar=ntList('bar');$('#nb').innerHTML=bar.map(n=>`<div class="nbar nt-${ntType(n)}"><div>${n.title?`<b>${esc(n.title)}</b> `:''}${esc(n.msg)} ${okU(n.link)?`<a href="${esc(n.link)}" target="_blank" rel="noopener noreferrer">${esc(n.btn||'বিস্তারিত')} →</a>`:''}${ntSoc(n)}</div><button onclick="dismissN('${esc(n.id)}')" aria-label="বন্ধ করুন">✕</button></div>`).join('');
 bar.forEach(n=>{if(+n.secs>0&&!SCH.has(n.id)){SCH.add(n.id);setTimeout(()=>dismissN(n.id),n.secs*1000)}});
 $('#ftn').innerHTML=ntList('footer').map(ntCard).join('');$('#fts').innerHTML=socRow('footer');
-applyWelcome();applyBrand();checkAdminPopupNotices();checkAppUpdate();
+applyWelcome(fresh);applyBrand();checkAdminPopupNotices();checkAppUpdate();
 if(fresh===true){const m=(CFG&&CFG.maint)||{},e=$('#mt');if(m.on){e.innerHTML=`<div class="mtc"><div class="mti">⚙</div><h2>সাময়িকভাবে বন্ধ</h2><p>${esc(m.msg||'কিছু কাজ চলছে। একটু পরে আবার চেষ্টা করুন।')}</p><button class="p" onclick="location.reload()">আবার চেষ্টা করুন</button></div>`;e.style.display='flex'}else{e.style.display='none'}}
 if(!tok&&!isUserInputActive()&&!(($('#ae')||{}).value)&&!(($('#ap')||{}).value)&&!(($('#rf-fn')||{}).value)&&!(($('#rf-em')||{}).value))authView(currentAuthMode)}
-async function loadCfg(){try{const r=await fetchT(apiUrl('config'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vid:VID})});if(!r.ok)return;CFG=await r.json();try{LS.setItem('kh_cfg',JSON.stringify(CFG))}catch(e){}applyCfg(true);checkAdminPopupNotices();checkAppUpdate()}catch(e){}}
+async function loadCfg(){try{lastCfgLoad=Date.now();const r=await fetchT(apiUrl('config'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vid:VID})});if(!r.ok)return;CFG=await r.json();try{LS.setItem('kh_cfg',JSON.stringify(CFG))}catch(e){}applyCfg(true);checkAdminPopupNotices();checkAppUpdate()}catch(e){}}
 applyCfg();loadCfg();
 applyPrefs();go();sync();pingLoop();
 
@@ -2450,10 +2531,9 @@ function initCapacitorNativeUX(){
       });
       plugins.App.addListener('appStateChange',({isActive})=>{
         if(isActive){
-          IDLE=0;
-          sync();
+          onAppReEnter();
         }else{
-          flush();
+          onAppBackground();
         }
       });
     }catch(e){console.warn('Capacitor App listener setup:',e);}
