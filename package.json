@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "cap:copy": "cp -r khoroch/* public/khoroch/ && npx cap copy android && rm -rf android/app/src/main/assets/public/api.php android/app/src/main/assets/public/admin.php android/app/src/main/assets/public/.htaccess android/app/src/main/assets/public/README.txt android/app/src/main/assets/public/data",
-    "cap:sync": "cp -r khoroch/* public/khoroch/ && npx cap sync android && rm -rf android/app/src/main/assets/public/api.php android/app/src/main/assets/public/admin.php android/app/src/main/assets/public/.htaccess android/app/src/main/assets/public/README.txt android/app/src/main/assets/public/data",
+    "cap:copy": "cp -r khoroch/* public/khoroch/ && npx cap copy android && rm -rf android/app/src/main/assets/public/*.php android/app/src/main/assets/public/.htaccess android/app/src/main/assets/public/README.txt android/app/src/main/assets/public/data",
+    "cap:sync": "cp -r khoroch/* public/khoroch/ && npx cap sync android && rm -rf android/app/src/main/assets/public/*.php android/app/src/main/assets/public/.htaccess android/app/src/main/assets/public/README.txt android/app/src/main/assets/public/data",
     "cap:open:android": "npx cap open android",
     "android:assemble:debug": "cd android && ./gradlew assembleDebug",
     "android:assemble:release": "cd android && ./gradlew assembleRelease"

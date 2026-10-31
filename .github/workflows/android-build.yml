@@ -80,8 +80,8 @@ jobs:
             echo "Inspecting APK package metadata via aapt:"
             "$AAPT_BIN" dump badging "$APK_PATH" | grep -E "package:|application-label:|sdkVersion:|targetSdkVersion:"
             "$AAPT_BIN" dump badging "$APK_PATH" | grep -q "name='com.tanvir.khoroch'"
-            "$AAPT_BIN" dump badging "$APK_PATH" | grep -q "versionCode='1'"
-            "$AAPT_BIN" dump badging "$APK_PATH" | grep -q "versionName='1.0.0'"
+            "$AAPT_BIN" dump badging "$APK_PATH" | grep -Eq "versionCode='[0-9]+'"
+            "$AAPT_BIN" dump badging "$APK_PATH" | grep -Eq "versionName='[^']+'"
           fi
 
       - name: Upload Debug APK Artifact

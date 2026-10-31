@@ -184,7 +184,9 @@ if (ADMIN_PASS === 'CHANGE_ME_NOW') {
   page('সেটআপ দরকার', top() . '<div class="c"><h2>সেটআপ দরকার</h2><p>এই ফাইলটি (admin.php) খুলে একদম উপরের <b>ADMIN_PASS</b>-এর লেখা বদলে একটি লম্বা গোপন পাসওয়ার্ড দিন। তারপর এই পেজ আবার খুলুন।</p></div>');
   exit;
 }
+require_once __DIR__ . '/db_cloud.php';
 $dataDir = __DIR__ . '/data';
+if (!is_dir($dataDir)) @mkdir($dataDir, 0750, true);
 if (is_dir($dataDir)) {
   if (!is_file($dataDir . '/.htaccess')) {
     @file_put_contents($dataDir . '/.htaccess', "<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\nOrder allow,deny\nDeny from all\n</IfModule>\n");
@@ -194,9 +196,12 @@ if (is_dir($dataDir)) {
   }
 }
 $dbf = $dataDir . '/khoroch.sqlite';
-if (!extension_loaded('pdo_sqlite') || !is_file($dbf)) {
-  page('ডেটাবেস নেই', top() . '<div class="c"><h2>ডেটাবেস নেই</h2><p>এখনো কোনো অ্যাকাউন্ট খোলা হয়নি, অথবা এই hosting-এ PDO SQLite চালু নেই। আগে সাইট একবার খুলুন।</p></div>');
+if (!extension_loaded('pdo_sqlite')) {
+  page('ডেটাবেস ত্রুটি', top() . '<div class="c"><h2>PDO SQLite চালু নেই</h2><p>এই hosting-এ PDO SQLite এক্সটেনশন চালু নেই।</p></div>');
   exit;
+}
+if (!is_file($dbf) || filesize($dbf) < 4096) {
+  @cloudRestoreDb($dbf);
 }
 $db = new PDO('sqlite:' . $dbf);
 $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -206,10 +211,26 @@ try {
   $db->exec('PRAGMA synchronous=NORMAL;');
   $db->exec('PRAGMA temp_store=MEMORY;');
 } catch (Throwable $e) {}
-$db->exec('CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v TEXT);
-CREATE TABLE IF NOT EXISTS prefs(user_id INTEGER, id TEXT, v TEXT, updated INTEGER, deleted INTEGER DEFAULT 0, rev INTEGER, PRIMARY KEY(user_id,id));
+$db->exec("
+CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, hash TEXT NOT NULL, rev INTEGER NOT NULL DEFAULT 0, created INTEGER, synced INTEGER, status TEXT NOT NULL DEFAULT 'active', fullname TEXT DEFAULT '', name TEXT DEFAULT '');
+CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY, t INTEGER, type TEXT, who TEXT, ip TEXT);
-CREATE TABLE IF NOT EXISTS visits(day TEXT, vid TEXT, hits INTEGER, last INTEGER, plat TEXT, PRIMARY KEY(day,vid));');
+CREATE INDEX IF NOT EXISTS ix_logs ON logs(type,ip,t);
+CREATE TABLE IF NOT EXISTS visits(day TEXT, vid TEXT, hits INTEGER, last INTEGER, plat TEXT, PRIMARY KEY(day,vid));
+CREATE TABLE IF NOT EXISTS tokens(token_hash TEXT PRIMARY KEY, user_id INTEGER, created INTEGER, last_seen INTEGER);
+CREATE INDEX IF NOT EXISTS ix_tokens_user ON tokens(user_id);
+CREATE TABLE IF NOT EXISTS groups_(user_id INTEGER, id TEXT, name TEXT, updated INTEGER, deleted INTEGER DEFAULT 0, rev INTEGER, PRIMARY KEY(user_id,id));
+CREATE TABLE IF NOT EXISTS categories(user_id INTEGER, id TEXT, group_id TEXT, parent TEXT, name TEXT, updated INTEGER, deleted INTEGER DEFAULT 0, rev INTEGER, PRIMARY KEY(user_id,id));
+CREATE TABLE IF NOT EXISTS expenses(user_id INTEGER, id TEXT, group_id TEXT, amount REAL, date TEXT, time TEXT, descr TEXT, note TEXT, updated INTEGER, deleted INTEGER DEFAULT 0, rev INTEGER, PRIMARY KEY(user_id,id));
+CREATE TABLE IF NOT EXISTS expense_categories(user_id INTEGER, expense_id TEXT, category_id TEXT, PRIMARY KEY(user_id,expense_id,category_id));
+CREATE TABLE IF NOT EXISTS prefs(user_id INTEGER, id TEXT, v TEXT, updated INTEGER, deleted INTEGER DEFAULT 0, rev INTEGER, PRIMARY KEY(user_id,id));
+");
+$ucolsInit = array_column($db->query('PRAGMA table_info(users)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+if (!in_array('created', $ucolsInit)) $db->exec('ALTER TABLE users ADD COLUMN created INTEGER');
+if (!in_array('synced', $ucolsInit)) $db->exec('ALTER TABLE users ADD COLUMN synced INTEGER');
+if (!in_array('status', $ucolsInit)) $db->exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+if (!in_array('fullname', $ucolsInit)) $db->exec("ALTER TABLE users ADD COLUMN fullname TEXT DEFAULT ''");
+if (!in_array('name', $ucolsInit)) $db->exec("ALTER TABLE users ADD COLUMN name TEXT DEFAULT ''");
 $tcols = array_column($db->query('PRAGMA table_info(tokens)')->fetchAll(PDO::FETCH_ASSOC), 'name');
 if ($tcols && !in_array('last_seen', $tcols)) $db->exec('ALTER TABLE tokens ADD COLUMN last_seen INTEGER');
 function q($sql, $p = []) { global $db; $s = $db->prepare($sql); $s->execute($p); return $s; }
@@ -597,7 +618,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['act'])) {
         logit('অ্যাপ আপডেট সেটিংস সেভ: v' . $ver . ' (' . ($on ? 'চালু' : 'বন্ধ') . ')');
         $msg = 'অ্যান্ড্রয়েড অ্যাপ আপডেট সেটিংস সেভ হয়েছে।';
         break;
+      case 'cloud_sync_save':
+        $ghTok = trim((string)($_POST['github_token'] ?? ''));
+        if ($ghTok === '') {
+          q("DELETE FROM settings WHERE k='github_token'");
+          @unlink($dataDir . '/.cloud_token');
+          $msg = 'ক্লাউড সিঙ্ক টোকেন সরানো হয়েছে।';
+          break;
+        }
+        $curUsers = (int)q('SELECT COUNT(*) FROM users')->fetchColumn();
+        if ($curUsers === 0) {
+          $db = null;
+          if (@cloudRestoreDb($dbf, $ghTok)) {
+            $db = new PDO('sqlite:' . $dbf);
+            $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            sset('github_token', $ghTok);
+            @file_put_contents($dataDir . '/.cloud_token', $ghTok);
+            $msg = '✓ ক্লাউড থেকে পূর্বের সম্পূর্ণ ডেটাবেস (সব ইউজার ও সেটিংস) সফলভাবে রিস্টোর হয়েছে!';
+            break;
+          }
+          $db = new PDO('sqlite:' . $dbf);
+          $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        }
+        sset('github_token', $ghTok);
+        @file_put_contents($dataDir . '/.cloud_token', $ghTok);
+        if (@cloudBackupDb($db, $dbf, true)) {
+          $msg = '✓ ক্লাউড ব্যাকআপ সফলভাবে চালু হয়েছে এবং ডেটাবেস GitHub Gist-এ সংরক্ষিত হয়েছে!';
+        } else {
+          $msg = 'টোকেন সেভ হয়েছে, তবে GitHub Gist-এ সংযোগ করা যায়নি। টোকেনে gist পারমিশন আছে কি না দেখুন।';
+        }
+        break;
+      case 'auto_restore_vault':
+        $rawVault = (string)($_POST['vault_json'] ?? '');
+        $vData = json_decode($rawVault, true);
+        if (is_array($vData)) {
+          if (!empty($vData['github_token']) && (int)q('SELECT COUNT(*) FROM users')->fetchColumn() === 0) {
+            $ghT = trim((string)$vData['github_token']);
+            $db = null;
+            if (@cloudRestoreDb($dbf, $ghT)) {
+              $db = new PDO('sqlite:' . $dbf);
+              $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            } else {
+              $db = new PDO('sqlite:' . $dbf);
+              $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            }
+            sset('github_token', $ghT);
+            @file_put_contents($dataDir . '/.cloud_token', $ghT);
+          }
+          foreach (['notices', 'social', 'welcome', 'brand', 'maint', 'app_update', 'socmode', 'reg_mode', 'poll'] as $vk) {
+            if (isset($vData[$vk]) && is_string($vData[$vk]) && $vData[$vk] !== '' && sraw($vk) === false) {
+              sset($vk, $vData[$vk]);
+            }
+          }
+          $msg = '✓ সার্ভার রিস্টার্টের পর আপনার পূর্বের অ্যাডমিন সেটিংস স্বয়ংক্রিয়ভাবে রিস্টোর করা হয়েছে!';
+        }
+        break;
     }
+    @cloudBackupDb($db, $dbf, true);
   }
   $_SESSION['flash'] = $msg;
   header('Location: ' . $self . '#' . $tab);
@@ -607,6 +684,7 @@ $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 
 $ucols = array_column($db->query('PRAGMA table_info(users)')->fetchAll(PDO::FETCH_ASSOC), 'name');
 $hasC = in_array('created', $ucols); $hasS = in_array('synced', $ucols);
+$hasFn = in_array('fullname', $ucols); $hasNm = in_array('name', $ucols);
 $syn24 = $hasS ? (int)q('SELECT COUNT(*) FROM users WHERE synced>=?', [time() - 86400])->fetchColumn() : 0;
 $fails24 = (int)q("SELECT COUNT(*) FROM logs WHERE type IN ('login_fail','admin_fail') AND t>=?", [time() - 86400])->fetchColumn();
 $today = date('Y-m-d'); $d7 = date('Y-m-d', strtotime('-6 days')); $d30 = date('Y-m-d', strtotime('-29 days'));
@@ -626,7 +704,7 @@ foreach (q('SELECT day,COUNT(*) c FROM visits WHERE day>=? GROUP BY day', [date(
 $plat = q('SELECT plat,COUNT(DISTINCT vid) c FROM visits WHERE day>=? GROUP BY plat ORDER BY c DESC', [$d30])->fetchAll(PDO::FETCH_ASSOC);
 $sz = filesize($dbf);
 $szt = $sz > 1048576 ? number_format($sz / 1048576, 2) . ' MB' : number_format($sz / 1024, 1) . ' KB';
-$users = q('SELECT u.id, u.email, u.status, ' . ($hasC ? 'u.created' : 'NULL') . ' created, ' . ($hasS ? 'u.synced' : 'NULL') . ' synced,
+$users = q('SELECT u.id, u.email, u.status, ' . ($hasFn ? 'u.fullname' : "''") . ' fullname, ' . ($hasNm ? 'u.name' : "''") . ' name, ' . ($hasC ? 'u.created' : 'NULL') . ' created, ' . ($hasS ? 'u.synced' : 'NULL') . ' synced,
   (SELECT COUNT(*) FROM tokens t WHERE t.user_id=u.id) tk,
   (SELECT MAX(created) FROM tokens t WHERE t.user_id=u.id) last FROM users u ORDER BY (u.status=\'pending\') DESC, u.id DESC')->fetchAll(PDO::FETCH_ASSOC);
 $code = sraw('delete_code'); if ($code === false) $code = DEFAULT_CODE;
@@ -818,11 +896,17 @@ $b .= '<section data-t="appup"><div class="c"><h2>📱 অ্যান্ড্�
 </div></div></section>';
 
 // ব্যবহারকারী
-$b .= '<section data-t="users"><div class="c"><h2>ব্যবহারকারী (' . count($users) . ' জন)</h2><a class="btn g" style="padding:6px 12px;font-size:14px;float:right" href="?usercsv=1&csrf=' . $cs . '">CSV</a><input id="qs" placeholder="ইমেইল দিয়ে খুঁজুন…" autocomplete="off"><div class="row" style="margin:2px 0 8px"><button class="g" type="button" data-f="all">সব</button><button class="g" type="button" data-f="pending">অপেক্ষায়</button><button class="g" type="button" data-f="blocked">ব্লক</button></div><p class="m">পাসওয়ার্ড কেউ দেখতে পারে না (এনক্রিপ্টেড থাকে)। শুধু নতুন পাসওয়ার্ড বসানো যায়। ব্যবহারকারীর খরচ বা টাকার তথ্য এখানে দেখানো হয় না।</p>';
+$b .= '<section data-t="users"><div class="c"><h2>ব্যবহারকারী (' . count($users) . ' জন)</h2><a class="btn g" style="padding:6px 12px;font-size:14px;float:right" href="?usercsv=1&csrf=' . $cs . '">CSV</a><input id="qs" placeholder="নাম বা ইমেইল দিয়ে খুঁজুন…" autocomplete="off"><div class="row" style="margin:2px 0 8px"><button class="g" type="button" data-f="all">সব</button><button class="g" type="button" data-f="pending">অপেক্ষায়</button><button class="g" type="button" data-f="blocked">ব্লক</button></div><p class="m">পাসওয়ার্ড কেউ দেখতে পারে না (এনক্রিপ্টেড থাকে)। শুধু নতুন পাসওয়ার্ড বসানো যায়। ব্যবহারকারীর খরচ বা টাকার তথ্য এখানে দেখানো হয় না।</p>';
 if (!$users) $b .= '<p class="m">এখনো কেউ নেই।</p>';
 foreach ($users as $u) {
   $i = (int)$u['id']; $stt = $u['status'] ?: 'active';
-  $b .= '<div class="u" data-s="' . h($stt) . '" data-q="' . h(strtolower($u['email'])) . '"><div class="uh"><span class="av">' . h(strtoupper(substr($u['email'], 0, 1))) . '</span><div class="ui"><b>' . h($u['email']) . '</b><div class="m">#' . $i . ' · যোগ দিয়েছেন: ' . h(secs($u['created'])) . '</div></div><span class="sw ' . ($stt === 'active' ? 'on' : ($stt === 'pending' ? 'nt0' : 'off')) . '" style="margin-left:auto">' . ($stt === 'active' ? 'সক্রিয়' : ($stt === 'pending' ? 'অনুমোদনের অপেক্ষায়' : 'ব্লক')) . '</span></div>
+  $fn = trim((string)($u['fullname'] ?? ''));
+  $dn = trim((string)($u['name'] ?? ''));
+  $displayName = $fn !== '' ? $fn : ($dn !== '' ? $dn : $u['email']);
+  $sub = ($fn !== '' && $dn !== '' && $fn !== $dn) ? ' (' . $dn . ') · ' : '';
+  $initial = strtoupper(substr($fn !== '' ? $fn : ($dn !== '' ? $dn : $u['email']), 0, 1));
+  $searchStr = strtolower($u['email'] . ' ' . $fn . ' ' . $dn);
+  $b .= '<div class="u" data-s="' . h($stt) . '" data-q="' . h($searchStr) . '"><div class="uh"><span class="av">' . h($initial) . '</span><div class="ui"><b>' . h($displayName) . '</b><div class="m">' . h($sub) . h($u['email']) . ' · #' . $i . ' · যোগ: ' . h(secs($u['created'])) . '</div></div><span class="sw ' . ($stt === 'active' ? 'on' : ($stt === 'pending' ? 'nt0' : 'off')) . '" style="margin-left:auto">' . ($stt === 'active' ? 'সক্রিয়' : ($stt === 'pending' ? 'অনুমোদনের অপেক্ষায়' : 'ব্লক')) . '</span></div>
   ' . ($stt === 'pending' ? '<form method="post" style="margin:8px 0">' . hid($cs, 'approve', 'users', $i) . '<button>অনুমোদন দিন</button></form>' : '') . '
   <div class="chips"><span>শেষ লগইন: ' . h(secs($u['last'])) . '</span><span>শেষ সিঙ্ক: ' . h(secs($u['synced'])) . '</span><span>সক্রিয় ডিভাইস: ' . (int)$u['tk'] . 'টি</span></div>
   <details><summary>ম্যানেজ করুন</summary>
@@ -849,17 +933,50 @@ $b .= '<section data-t="set">
 <div class="c"><h2>ইউনিভার্সাল কোড (অ্যাকাউন্ট ডিলিটের জন্য)</h2><p class="m">বর্তমান কোড: <b id="cd" style="color:#E3B95C">•••••• (সুরক্ষিত)</b></p>
 <form method="post" class="row">' . hid($cs, 'code', 'set') . '<input type="password" name="code" placeholder="নতুন কোড (কমপক্ষে ৪ অক্ষর)" autocomplete="new-password"><button>কোড বদলান</button></form></div>
 <div class="c"><h2>অ্যাডমিন পাসওয়ার্ড বদলান</h2><form method="post">' . hid($cs, 'apw', 'set') . '<input type="password" name="old" placeholder="বর্তমান অ্যাডমিন পাসওয়ার্ড" autocomplete="current-password"><input type="password" name="new" placeholder="নতুন পাসওয়ার্ড (কমপক্ষে ১০ অক্ষর)" autocomplete="new-password"><button>পাসওয়ার্ড বদলান</button></form></div>
+$ghTokCur = getCloudToken($db);
+$ghB64 = $ghTokCur !== '' ? base64_encode($ghTokCur) : '';
+$vaultMap = [];
+foreach (['notices', 'social', 'welcome', 'brand', 'maint', 'app_update', 'socmode', 'reg_mode', 'poll', 'github_token'] as $vk) {
+  $vv = sraw($vk);
+  if ($vv !== false && $vv !== '') $vaultMap[$vk] = $vv;
+}
+$vaultJson = json_encode($vaultMap, JSON_UNESCAPED_UNICODE);
+$isFreshReset = ($nUsers === 0 && empty($vaultMap));
+
+$b .= '<div class="c" style="border-color:rgba(45,212,191,0.45);background:linear-gradient(145deg,#101B2B,#0D2235)"><h2>☁️ স্থায়ী ক্লাউড ডাটাবেস সিঙ্ক (Render.com Auto-Restore)</h2>
+<p class="m">Render.com-এর ফ্রি টিয়ারে ১৫ মিনিট ভিজিটর না থাকলে বা গিটহাবে কোড আপডেট করলে সার্ভার কন্টেইনার রিস্টার্ট হয়। নিচে আপনার GitHub Personal Access Token (<code>gist</code> পারমিশনসহ) দিয়ে রাখলে প্রতিবার ডেটাবেস স্বয়ংক্রিয়ভাবে আপনার গোপন GitHub Gist-এ ব্যাকআপ হবে এবং কন্টেইনার রিস্টার্ট হলে নিজে নিজেই রিস্টোর হয়ে যাবে!</p>
+<p class="m">বর্তমান অবস্থা: ' . ($ghTokCur !== '' ? '<span class="sw on">ক্লাউড অটো-ব্যাকআপ চালু আছে ✓</span>' : '<span class="sw nt0">ব্রাউজার ও ডিভাইস সেলফ-হিলিং চালু (ক্লাউড টোকেন দেওয়া হয়নি)</span>') . '</p>
+<form method="post">' . hid($cs, 'cloud_sync_save', 'set') . '
+<input type="password" name="github_token" placeholder="GitHub Token (যেমন: ghp_xxxxxxxxxxxx)" value="' . h($ghTokCur) . '" autocomplete="off">
+<div class="row"><button>টোকেন সেভ ও ক্লাউড সিঙ্ক করুন</button></div></form>
+' . ($ghB64 !== '' ? '<p class="m" style="margin-top:8px">স্থায়ীভাবে চালু রাখতে Render.com-এর Environment Variables-এ <b>GITHUB_TOKEN</b> যোগ করুন, অথবা <code>khoroch/api.php</code> ফাইলের ৫ নম্বর লাইনে বসান:<br><code style="color:#5CE1E6;user-select:all">const CLOUD_BACKUP_B64 = \'' . h($ghB64) . '\';</code></p>' : '') . '</div>
 <div class="c"><h2>সেটিংস ব্যাকআপ ও রিস্টোর</h2><p class="m">নোটিস, সোশ্যাল লিংক, ওয়েলকাম পপআপ, ব্র্যান্ডিং ও মেইনটেন্যান্স সেটিংস একটি ফাইলে নামিয়ে রাখুন, পরে ফিরিয়ে আনুন। (পাসওয়ার্ড বা ব্যবহারকারীর ডেটা এতে থাকে না।)</p><div class="row"><a class="btn g" href="?cfgdl=1&csrf=' . $cs . '">কনফিগ ডাউনলোড</a></div>
 <form method="post" enctype="multipart/form-data" style="margin-top:10px">' . hid($cs, 'cfg_import', 'set') . '<input type="file" name="f" accept=".json,application/json"><button class="g">ইমপোর্ট করুন</button></form></div>
 <div class="c"><h2>রক্ষণাবেক্ষণ</h2><div class="row"><form method="post">' . hid($cs, 'vacuum', 'set') . '<button class="g">ডেটাবেস অপ্টিমাইজ</button></form><form method="post">' . hid($cs, 'purge', 'set') . '<button class="g">পুরনো সেশন পরিষ্কার (' . (int)$oldTok . 'টি)</button></form></div></div>
 <div class="c"><h2>পুরো ডেটাবেসের ব্যাকআপ</h2><p class="m">সব ব্যবহারকারীর ডেটাসহ ফাইলটি নামিয়ে নিরাপদ জায়গায় রাখুন।</p><a class="btn" href="?dbdl=1&csrf=' . $cs . '">ডেটাবেস ডাউনলোড (.sqlite)</a></div></section>';
 
+$b .= '<form id="arf" method="post" style="display:none">' . hid($cs, 'auto_restore_vault', 'ov') . '<input type="hidden" name="vault_json" id="arvj"></form>';
 $b .= '<div id="cm"><div class="cb"><div class="ic">!</div><h2 id="cmt" style="margin:0 0 6px"></h2><div class="m" id="cms"></div><input id="cmi" style="display:none;text-align:center"><div class="row"><button class="g" id="cmx" type="button">বাতিল</button><button class="r" id="cmo" type="button">নিশ্চিত করুন</button></div></div></div>';
 
-$js = <<<'JS'
-<script>
+$js = '<script>
+const SERVER_VAULT = ' . $vaultJson . ';
+const IS_FRESH_RESET = ' . ($isFreshReset ? 'true' : 'false') . ';
+try {
+  if (!IS_FRESH_RESET && Object.keys(SERVER_VAULT).length > 0) {
+    const prev = JSON.parse(localStorage.getItem("kh_adm_vault") || "{}");
+    localStorage.setItem("kh_adm_vault", JSON.stringify(Object.assign({}, prev, SERVER_VAULT)));
+  } else if (IS_FRESH_RESET) {
+    const saved = localStorage.getItem("kh_adm_vault");
+    if (saved && saved.length > 5 && !sessionStorage.getItem("kh_adm_restored")) {
+      sessionStorage.setItem("kh_adm_restored", "1");
+      document.getElementById("arvj").value = saved;
+      document.getElementById("arf").submit();
+    }
+  }
+} catch(e) {}
+' . <<<'JS'
 const $=(s)=>document.querySelector(s);
-const TABS=['ov','notice','social','welcome','users','set'];
+const TABS=['ov','notice','social','welcome','appup','users','set'];
 function mv(b,d){const r=b.closest('.sr'),p=r.parentNode;if(d<0&&r.previousElementSibling)p.insertBefore(r,r.previousElementSibling);if(d>0&&r.nextElementSibling)p.insertBefore(r.nextElementSibling,r)}
 function addS(){$('#sl').insertAdjacentHTML('beforeend',$('#stp').innerHTML.replace(/__I__/g,'n'+Date.now()))}
 function tab(t){document.querySelectorAll('[data-t]').forEach(s=>{s.style.display=s.dataset.t===t?'':'none'});document.querySelectorAll('.tb a').forEach(a=>a.classList.toggle('on',a.dataset.k===t))}

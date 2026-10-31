@@ -2,6 +2,8 @@
 // খরচের খাতা — PHP backend (SQLite)। কোনো database সেটআপ লাগে না।
 const ALLOW_REGISTER = true;   // নিজের অ্যাকাউন্ট খোলার পর false করে দিন
 const DELETE_CODE = 'TanvirX';   // অ্যাকাউন্ট মুছতে পাসওয়ার্ডের সাথে এই কোডও লাগবে
+const CLOUD_BACKUP_B64 = '';     // ঐচ্ছিক: GitHub Token-এর Base64 কোড (অ্যাডমিন প্যানেল থেকে পাবেন)
+require_once __DIR__ . '/db_cloud.php';
 
 date_default_timezone_set('Asia/Dhaka');
 ob_start();
@@ -41,7 +43,11 @@ try {
   if (!is_file($dir . '/index.php')) {
     @file_put_contents($dir . '/index.php', "<?php http_response_code(403); exit('Forbidden');\n");
   }
-  $db = new PDO('sqlite:' . $dir . '/khoroch.sqlite');
+  $dbf = $dir . '/khoroch.sqlite';
+  if (!is_file($dbf) || filesize($dbf) < 4096) {
+    @cloudRestoreDb($dbf);
+  }
+  $db = new PDO('sqlite:' . $dbf);
   $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $db->exec('PRAGMA busy_timeout=8000;');
   try {
@@ -49,7 +55,7 @@ try {
     $db->exec('PRAGMA synchronous=NORMAL;');
     $db->exec('PRAGMA temp_store=MEMORY;');
   } catch (Throwable $e) {}
-  if ((int)$db->query('PRAGMA user_version')->fetchColumn() < 7) {
+  if ((int)$db->query('PRAGMA user_version')->fetchColumn() < 8) {
   $db->exec("
   CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, hash TEXT NOT NULL, rev INTEGER NOT NULL DEFAULT 0);
   CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v TEXT);
@@ -76,10 +82,12 @@ try {
   if (!in_array('created', $cols)) $db->exec('ALTER TABLE users ADD COLUMN created INTEGER');
   if (!in_array('synced', $cols)) $db->exec('ALTER TABLE users ADD COLUMN synced INTEGER');
   if (!in_array('status', $cols)) $db->exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  if (!in_array('fullname', $cols)) $db->exec("ALTER TABLE users ADD COLUMN fullname TEXT DEFAULT ''");
+  if (!in_array('name', $cols)) $db->exec("ALTER TABLE users ADD COLUMN name TEXT DEFAULT ''");
   $tcols = array_column($db->query('PRAGMA table_info(tokens)')->fetchAll(PDO::FETCH_ASSOC), 'name');
   if (!in_array('last_seen', $tcols)) $db->exec('ALTER TABLE tokens ADD COLUMN last_seen INTEGER');
   $db->exec("INSERT OR IGNORE INTO settings(k,v) VALUES('tombstone_horizon_rev', '0')");
-  $db->exec('PRAGMA user_version=7');
+  $db->exec('PRAGMA user_version=8');
   }
 
   function q($sql, $p = []) { global $db; $s = $db->prepare($sql); $s->execute($p); return $s; }
@@ -192,17 +200,49 @@ try {
       $ar = q("SELECT v FROM settings WHERE k='allow_register'")->fetchColumn();
       $rm = $ar === false ? (ALLOW_REGISTER ? 'open' : 'closed') : ($ar === '1' ? 'open' : 'closed');
     }
-    if ($rm === 'closed') out(['error' => 'নতুন অ্যাকাউন্ট খোলা বন্ধ আছে'], 403);
+    if ($rm === 'closed') out(['error' => 'নতুন অ্যাকাউন্ট নিবন্ধন বর্তমানে বন্ধ আছে।'], 403);
     $rip = $_SERVER['REMOTE_ADDR'] ?? '';
     if ((int)q("SELECT COUNT(*) FROM logs WHERE type='register' AND ip=? AND t>?", [$rip, time() - 3600])->fetchColumn() >= 5)
       out(['error' => 'একই জায়গা থেকে অনেক অ্যাকাউন্ট খোলা হয়েছে। ১ ঘণ্টা পর আবার চেষ্টা করুন।'], 429);
-    $email = strtolower(trim($in['email'] ?? '')); $pw = (string)($in['password'] ?? '');
-    if (strlen($email) > 254 || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($pw) < 8 || strlen($pw) > 200) out(['error' => 'সঠিক ইমেইল এবং ৮+ অক্ষরের পাসওয়ার্ড দিন'], 400);
-    if (q('SELECT 1 FROM users WHERE email=?', [$email])->fetch()) out(['error' => 'এই ইমেইল আগে থেকেই আছে'], 409);
-    q('INSERT INTO users(email,hash,created,status) VALUES(?,?,?,?)', [$email, password_hash($pw, PASSWORD_DEFAULT), time(), $rm === 'approval' ? 'pending' : 'active']);
-    logev('register', $email);
-    if ($rm === 'approval') out(['error' => 'অ্যাকাউন্ট তৈরি হয়েছে। অ্যাডমিনের অনুমোদনের পর লগইন করতে পারবেন।'], 403);
-    out(['token' => newToken((int)$db->lastInsertId())]);
+    $email = strtolower(trim($in['email'] ?? ''));
+    $pw = (string)($in['password'] ?? '');
+    $fullname = trim(cut((string)($in['fullname'] ?? ''), 100));
+    $displayName = trim(cut((string)($in['displayName'] ?? $in['name'] ?? ''), 60));
+    if ($displayName === '' && $fullname !== '') {
+      $parts = preg_split('/\s+/', $fullname);
+      $displayName = $parts[0] ?? $fullname;
+    }
+    if ($fullname === '' || $displayName === '') {
+      out(['error' => 'পূর্ণ নাম ও ডিসপ্লে নাম দিন'], 400);
+    }
+    if (strlen($email) > 254 || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($pw) < 8 || strlen($pw) > 200) {
+      out(['error' => 'সঠিক ইমেইল এবং ৮+ অক্ষরের পাসওয়ার্ড দিন'], 400);
+    }
+    if (q('SELECT 1 FROM users WHERE email=?', [$email])->fetch()) {
+      out(['error' => 'এই ইমেইল দিয়ে আগেই অ্যাকাউন্ট খোলা হয়েছে'], 409);
+    }
+    $initialStatus = ($rm === 'approval') ? 'pending' : 'active';
+    q('INSERT INTO users(email,hash,created,status,fullname,name) VALUES(?,?,?,?,?,?)',
+      [$email, password_hash($pw, PASSWORD_DEFAULT), time(), $initialStatus, $fullname, $displayName]);
+    $newUid = (int)$db->lastInsertId();
+    logev('register', $email . ' (' . $fullname . ')');
+    @cloudBackupDb($db, $dbf, true);
+    if ($rm === 'approval') {
+      out([
+        'ok' => true,
+        'mode' => 'approval',
+        'message' => 'আপনার রেজিস্ট্রেশন সফল হয়েছে! অ্যাডমিন অনুমোদন করলে আপনি লগইন করতে পারবেন। অনুমোদনের পর আপনাকে ইমেইলে জানানো হবে।'
+      ]);
+    }
+    $tokOut = newToken($newUid);
+    @cloudBackupDb($db, $dbf, true);
+    out([
+      'ok' => true,
+      'mode' => 'open',
+      'token' => $tokOut,
+      'name' => $displayName,
+      'fullname' => $fullname
+    ]);
   }
 
   if ($a === 'login') {
@@ -212,11 +252,30 @@ try {
     $em = strtolower(trim($in['email'] ?? ''));
     $pwIn = (string)($in['password'] ?? '');
     $u = (strlen($em) <= 254 && $em !== '') ? q('SELECT * FROM users WHERE email=?', [$em])->fetch(PDO::FETCH_ASSOC) : false;
+    // Self-Healing Account Recovery: if container reset wiped SQLite, restore verified account from client vault
+    if (!$u && filter_var($em, FILTER_VALIDATE_EMAIL) && strlen($pwIn) >= 8 && strlen($pwIn) <= 200) {
+      $vault = isset($in['vault']) && is_array($in['vault']) ? $in['vault'] : null;
+      $vPw = $vault && isset($vault['pw_b64']) ? (string)base64_decode((string)$vault['pw_b64'], true) : '';
+      if ($vault && $vPw === $pwIn) {
+        $vFn = trim(cut((string)($vault['fullname'] ?? ''), 100));
+        $vNm = trim(cut((string)($vault['name'] ?? ''), 60)) ?: ($vFn !== '' ? (preg_split('/\s+/', $vFn)[0] ?? $vFn) : 'User');
+        q('INSERT INTO users(email,hash,created,status,fullname,name) VALUES(?,?,?,?,?,?)',
+          [$em, password_hash($pwIn, PASSWORD_DEFAULT), time(), 'active', $vFn ?: $vNm, $vNm]);
+        $u = q('SELECT * FROM users WHERE email=?', [$em])->fetch(PDO::FETCH_ASSOC);
+        logev('register', $em . ' (অটো-রিস্টোর)');
+      }
+    }
     if (!$u || strlen($pwIn) > 200 || !password_verify($pwIn, $u['hash'])) { logev('login_fail', $em); usleep(400000); out(['error' => 'ইমেইল বা পাসওয়ার্ড ভুল'], 401); }
-    if (($u['status'] ?? 'active') === 'pending') out(['error' => 'অ্যাডমিনের অনুমোদনের অপেক্ষায় আছে।'], 403);
+    if (($u['status'] ?? 'active') === 'pending') out(['error' => 'আপনার অ্যাকাউন্টটি অ্যাডমিনের অনুমোদনের অপেক্ষায় আছে। অনুমোদন সম্পন্ন হলে লগইন করতে পারবেন।'], 403);
     if (($u['status'] ?? 'active') === 'blocked') out(['error' => 'এই অ্যাকাউন্ট বন্ধ করা আছে।'], 403);
     logev('login', $em);
-    out(['token' => newToken((int)$u['id'])]);
+    $newTok = newToken((int)$u['id']);
+    @cloudBackupDb($db, $dbf);
+    out([
+      'token' => $newTok,
+      'name' => $u['name'] ?: $u['fullname'] ?: '',
+      'fullname' => $u['fullname'] ?? ''
+    ]);
   }
 
   // --- এখান থেকে লগইন লাগে (config ছাড়া) ---
@@ -232,7 +291,7 @@ try {
         if (mt_rand(1, 200) === 1) q('DELETE FROM visits WHERE day<?', [date('Y-m-d', time() - 400 * 86400)]);
       } catch (Throwable $exv) {}
     }
-    $cfgMap = q("SELECT k, v FROM settings WHERE k IN ('notices','social','socmode','poll','welcome','brand','maint','app_update')")->fetchAll(PDO::FETCH_KEY_PAIR);
+    $cfgMap = q("SELECT k, v FROM settings WHERE k IN ('notices','social','socmode','poll','welcome','brand','maint','app_update','reg_mode')")->fetchAll(PDO::FETCH_KEY_PAIR);
     $get = function ($k, $d) use ($cfgMap) { $v = $cfgMap[$k] ?? false; $j = ($v !== false && $v !== null) ? json_decode($v, true) : null; return $j === null ? $d : $j; };
     $now = date('Y-m-d\TH:i');
     $notices = [];
@@ -255,6 +314,7 @@ try {
     foreach ($sraw as $x) if (!empty($x['on']) && !empty($x['url'])) $social[] = ['id' => (string)($x['id'] ?? ('k' . substr(md5(($x['p'] ?? '') . '|' . ($x['url'] ?? '')), 0, 6))), 'k' => (string)($x['p'] ?? ''), 'label' => (string)($x['label'] ?? ''), 'url' => (string)$x['url'], 'loc' => array_values((array)($x['loc'] ?? []))];
     $sm = $cfgMap['socmode'] ?? false;
     $pl = isset($cfgMap['poll']) ? (int)$cfgMap['poll'] : 15; if ($pl < 5 || $pl > 120) $pl = 15;
+    $regMode = $cfgMap['reg_mode'] ?? (defined('ALLOW_REGISTER') && ALLOW_REGISTER ? 'open' : 'closed');
     $appUpdate = (object)$get('app_update', [
       'on' => 0,
       'ver' => '1.0.1',
@@ -265,7 +325,7 @@ try {
       'url' => '',
       'btn' => 'ইনস্টল করুন'
     ]);
-    out(['poll' => $pl, 'notices' => $notices, 'social' => $social, 'socmode' => $sm === false ? 'none' : $sm, 'welcome' => (object)$get('welcome', []), 'brand' => (object)$get('brand', []), 'maint' => $get('maint', ['on' => 0, 'msg' => '']), 'app_update' => $appUpdate]);
+    out(['poll' => $pl, 'notices' => $notices, 'social' => $social, 'socmode' => $sm === false ? 'none' : $sm, 'welcome' => (object)$get('welcome', []), 'brand' => (object)$get('brand', []), 'maint' => $get('maint', ['on' => 0, 'msg' => '']), 'reg_mode' => $regMode, 'app_update' => $appUpdate]);
   }
 
   // Extract token strictly from Authorization Bearer header, POST JSON body, or POST form data (NEVER from $_GET)
@@ -283,6 +343,31 @@ try {
 
   $tokHash = hash('sha256', $tok);
   $row = q('SELECT user_id, created, last_seen FROM tokens WHERE token_hash=?', [$tokHash])->fetch(PDO::FETCH_ASSOC);
+  $sessionHealed = false;
+  if (!$row && isset($in['vault']) && is_array($in['vault'])) {
+    $vEm = strtolower(trim((string)($in['vault']['email'] ?? '')));
+    $vPw = (string)base64_decode((string)($in['vault']['pw_b64'] ?? ''), true);
+    $vFn = trim(cut((string)($in['vault']['fullname'] ?? ''), 100));
+    $vNm = trim(cut((string)($in['vault']['name'] ?? ''), 60)) ?: ($vFn !== '' ? (preg_split('/\s+/', $vFn)[0] ?? $vFn) : 'User');
+    if (filter_var($vEm, FILTER_VALIDATE_EMAIL) && strlen($vPw) >= 8 && strlen($vPw) <= 200) {
+      $uExist = q('SELECT * FROM users WHERE email=?', [$vEm])->fetch(PDO::FETCH_ASSOC);
+      $healedUid = 0;
+      if (!$uExist) {
+        q('INSERT INTO users(email,hash,created,status,fullname,name) VALUES(?,?,?,?,?,?)',
+          [$vEm, password_hash($vPw, PASSWORD_DEFAULT), time(), 'active', $vFn ?: $vNm, $vNm]);
+        $healedUid = (int)$db->lastInsertId();
+        logev('register', $vEm . ' (সেশন অটো-রিস্টোর)');
+      } elseif (password_verify($vPw, $uExist['hash']) && ($uExist['status'] ?? 'active') === 'active') {
+        $healedUid = (int)$uExist['id'];
+      }
+      if ($healedUid > 0) {
+        $nowT = time();
+        q('INSERT OR REPLACE INTO tokens(token_hash,user_id,created,last_seen) VALUES(?,?,?,?)', [$tokHash, $healedUid, $nowT, $nowT]);
+        $row = ['user_id' => $healedUid, 'created' => $nowT, 'last_seen' => $nowT];
+        $sessionHealed = true;
+      }
+    }
+  }
   if (!$row) out(['error' => 'লগইন করুন'], 401);
 
   // 90-Day Inactivity Expiration Policy:
@@ -536,8 +621,14 @@ try {
         $expCatMap[$ecRow['expense_id']][] = $ecRow['category_id'];
       }
     }
+    if (!empty($in['parents']) || !empty($in['cats']) || !empty($in['exps']) || !empty($in['prefs']) || !empty($sessionHealed)) {
+      @cloudBackupDb($db, $dbf);
+    }
+    $grpTotalOnServer = (int)q('SELECT COUNT(*) FROM groups_ WHERE user_id=? AND deleted=0', [$u])->fetchColumn();
+    $needResyncAll = !empty($sessionHealed) || ($since > 0 && $grpTotalOnServer === 0);
     out([
       'since' => $nextSince, 'more' => $hasMore, 'now' => $nowMs, 'notice' => $notice,
+      'resync_all' => $needResyncAll,
       'parents' => array_map(fn($p) => ['id' => $p['id'], 'name' => $p['name'], 'updated' => (int)$p['updated'], 'deleted' => (int)$p['deleted']], $sel('groups_')),
       'cats' => array_map(fn($c) => ['id' => $c['id'], 'pid' => $c['group_id'], 'parent' => $c['parent'], 'name' => $c['name'], 'updated' => (int)$c['updated'], 'deleted' => (int)$c['deleted']], $sel('categories')),
       'prefs' => array_map(fn($x) => ['id' => $x['id'], 'v' => $x['v'], 'updated' => (int)$x['updated'], 'deleted' => (int)$x['deleted']], $sel('prefs')),

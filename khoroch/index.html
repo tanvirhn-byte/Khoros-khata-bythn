@@ -339,29 +339,47 @@ input::placeholder, textarea::placeholder { color: var(--mut-dark); }
 .amt {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: var(--bg);
-  border: 1.5px solid var(--ln);
+  gap: 12px;
+  background: radial-gradient(ellipse at top left, rgba(45, 212, 191, 0.08), transparent 60%), #0A1424;
+  border: 1.5px solid rgba(45, 212, 191, 0.3);
   border-radius: 18px;
-  padding: 4px 18px;
+  padding: 6px 14px;
   margin: 6px 0 12px;
-  transition: border-color .2s, box-shadow .2s;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.35), 0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: all .22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .amt:focus-within {
-  border-color: var(--ac2);
-  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.22);
+  border-color: #2DD4BF;
+  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.18), inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(45, 212, 191, 0.15);
+  background: radial-gradient(ellipse at top left, rgba(45, 212, 191, 0.14), transparent 60%), #0D1B2F;
 }
-.amt span { font-size: 30px; font-weight: 800; color: var(--ac2); line-height: 1; }
-.amt input {
-  border: 0;
-  background: none;
-  font-size: 34px;
+.amt-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: rgba(45, 212, 191, 0.14);
+  border: 1px solid rgba(45, 212, 191, 0.32);
+  color: #2DD4BF;
+  font-size: 24px;
   font-weight: 800;
-  color: var(--ink);
-  padding: 10px 0;
-  margin: 0;
-  outline: none;
-  font-feature-settings: 'tnum';
+  flex-shrink: 0;
+  line-height: 1;
+}
+.amt input {
+  border: 0 !important;
+  background: transparent !important;
+  font-size: 34px !important;
+  font-weight: 800 !important;
+  color: #FFFFFF !important;
+  padding: 8px 0 !important;
+  margin: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  font-feature-settings: 'tnum', 'lnum' !important;
+  letter-spacing: -0.5px;
 }
 
 /* Buttons */
@@ -494,7 +512,8 @@ button.s.x:hover { background: var(--bad-bg); border-color: var(--bad); }
   border-color: rgba(255, 255, 255, 0.08);
   transform: translateY(-1px);
 }
-.ei { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+.ei { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; overflow: hidden; }
+.ei>div { min-width: 0; flex: 1; overflow: hidden; }
 .av {
   flex: none;
   width: 44px;
@@ -508,8 +527,8 @@ button.s.x:hover { background: var(--bad-bg); border-color: var(--bad); }
   border: 1px solid rgba(45, 212, 191, 0.3);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
-.ei b { display: block; font-size: 14px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
-.row.er .mut { color: var(--mut); font-size: 12px; }
+.ei b { display: block; font-size: 14.5px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.row.er .mut { color: var(--mut); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row.er .tag {
   display: inline-block;
   font-size: 11px;
@@ -520,8 +539,13 @@ button.s.x:hover { background: var(--bad-bg); border-color: var(--bad); }
   border-radius: 8px;
   padding: 1px 7px;
   margin: 3px 4px 0 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
-.row.er>div:last-child { flex: none; text-align: right; }
+.row.er>div:last-child { flex: none; flex-shrink: 0; min-width: max-content; text-align: right; padding-left: 10px; }
 .row.er>div:last-child>b {
   display: block;
   font-size: 16px;
@@ -1176,8 +1200,8 @@ label.fl input[type="file"] { display: none; }
 /* Auth Screen */
 .auth {
   text-align: center;
-  padding: 32px 22px;
-  margin-top: 6vh;
+  padding: 30px 22px;
+  margin-top: 4vh;
 }
 .auth .logo {
   width: 68px;
@@ -1187,7 +1211,104 @@ label.fl input[type="file"] { display: none; }
   margin: 0 auto 12px;
 }
 .auth h2 { font-size: 26px; margin: 0 0 2px; }
-.auth .sub { font-size: 14px; color: var(--ac2); margin-bottom: 20px; }
+.auth .sub { font-size: 14px; color: var(--ac2); margin-bottom: 18px; }
+
+/* Auth Segmented Tabs */
+.auth-tabs {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--ln);
+  border-radius: 16px;
+  padding: 4px;
+  margin: 0 auto 18px;
+  gap: 4px;
+  max-width: 380px;
+}
+.auth-tab {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--mut);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.auth-tab.on {
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.18), rgba(14, 165, 233, 0.12));
+  color: var(--ac2);
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+.auth-field-wrap {
+  position: relative;
+  width: 100%;
+}
+.auth-field-wrap input {
+  padding-right: 44px;
+}
+.auth-pw-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--mut);
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: color .18s;
+}
+.auth-pw-btn:hover { color: var(--ac2); }
+.auth-alert {
+  padding: 12px 14px;
+  border-radius: 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+}
+.auth-alert.success {
+  background: rgba(52, 211, 153, 0.12);
+  color: #6EE7B7;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+}
+.auth-alert.warning {
+  background: rgba(251, 191, 36, 0.14);
+  color: #FCD34D;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+.auth-alert.danger {
+  background: rgba(248, 113, 113, 0.14);
+  color: #FCA5A5;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+.auth-alert.info {
+  background: rgba(14, 165, 233, 0.12);
+  color: #7DD3FC;
+  border: 1px solid rgba(14, 165, 233, 0.35);
+}
+.auth-switch-link {
+  display: inline-block;
+  margin-top: 14px;
+  color: var(--ac2);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  background: none;
+  border: none;
+  padding: 4px 8px;
+}
+.auth-switch-link:hover { opacity: .85; }
 
 /* Welcome Splash */
 #sp {
@@ -1672,7 +1793,7 @@ try{let u='api.php?a=delacct';try{u=apiUrl('delacct')}catch(_){}const r=await fe
 let tto;function toast(m,undo){const t=$('#tt');t.innerHTML='<span>'+esc(m)+'</span>'+(undo?'<button class="s" style="color:inherit;border-color:#fff6" id="tu">ফিরিয়ে আনুন</button>':'');t.style.display='flex';if(undo)$('#tu').onclick=()=>{undo();t.style.display='none'};clearTimeout(tto);tto=setTimeout(()=>{t.style.display='none'},6000)}
 function openForm(id,dup){const src=S.exps.find(x=>x.id==id),nt=new Date().toTimeString().slice(0,5),e=src?{...src,cats:[...src.cats]}:{cats:(S.last||[]).filter(i=>cats().some(c=>c.id==i)),dt:today(),tm:nt};if(dup&&src){e.dt=today();e.tm=nt;id=''}
 const r=(p,d)=>kids(p).map(c=>{const hk=kids(c.id).length,pick=!hk||e.cats.includes(c.id);return(pick?`<label class="ck" style="padding-left:${d*18}px"><input type="checkbox" value="${esc(c.id)}" ${e.cats.includes(c.id)?'checked':''}>${esc(c.name)}</label>`:`<div class="gh" style="padding-left:${d*18}px">${esc(c.name)}</div>`)+r(c.id,d+1)}).join('');
-$('#mc').innerHTML=`<div class="sh"><h3>${id?'খরচ সম্পাদনা':'নতুন খরচ'}</h3><button class="ib2" onclick="closeM()">✕</button></div><div class="lb">পরিমাণ</div><div class="amt"><span>${esc(S.sym)}</span><input id="fa" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(e.amt||'')}"></div><div class="two"><div><div class="lb">তারিখ</div><input id="fd" type="date" value="${esc(e.dt)}"></div><div><div class="lb">সময়</div><input id="ft" type="time" value="${esc(e.tm||'')}"></div></div><div class="chips"><button class="s" onclick="$('#fd').value=today()">আজ</button><button class="s" onclick="$('#fd').value=yday()">গতকাল</button></div><div class="lb">বিবরণ</div><input id="fs" autocomplete="off" placeholder="যেমন: কলেজ ফি" value="${esc(e.desc)}">
+$('#mc').innerHTML=`<div class="sh"><h3>${id?'খরচ সম্পাদনা':'নতুন খরচ'}</h3><button class="ib2" onclick="closeM()">✕</button></div><div class="lb">পরিমাণ</div><div class="amt"><span class="amt-badge">${esc(S.sym)}</span><input id="fa" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(e.amt||'')}"></div><div class="two"><div><div class="lb">তারিখ</div><input id="fd" type="date" value="${esc(e.dt)}"></div><div><div class="lb">সময়</div><input id="ft" type="time" value="${esc(e.tm||'')}"></div></div><div class="chips"><button class="s" onclick="$('#fd').value=today()">আজ</button><button class="s" onclick="$('#fd').value=yday()">গতকাল</button></div><div class="lb">বিবরণ</div><input id="fs" autocomplete="off" placeholder="যেমন: কলেজ ফি" value="${esc(e.desc)}">
 <div class="lb">ক্যাটাগরি <span class="mut">(একাধিক বাছাই করা যাবে — পরিমাণ ভাগ হবে না)</span></div><div class="cbox">${r(null,0)||'<span class="mut">আগে ক্যাটাগরি যোগ করুন</span>'}</div><div class="lb">নোট (ঐচ্ছিক)</div><textarea id="fn" rows="2">${esc(e.note)}</textarea>
 <button class="p" onclick="sv('${esc(id||'')}')">সেভ করুন</button> <button class="s" onclick="closeM()">বাতিল</button>${id?`<div style="margin-top:12px"><button class="s" onclick="openForm('${esc(id)}',1)">কপি করে নতুন খরচ</button> <button class="s x" onclick="del('${esc(id)}')">✕ মুছুন</button></div>`:''}`;$('#md').style.display='block'}
 async function sv(id){const rawAmt=parseAmt($('#mc #fa').value),a=Math.round(rawAmt*100)/100;if(!(a>0&&a<=1e12))return toast('সঠিক পরিমাণ লিখুন');if(!$('#mc #fd').value)return toast('তারিখ দিন');const o={pid:cur,amt:a,dt:$('#mc #fd').value,tm:$('#mc #ft').value,desc:$('#mc #fs').value,note:$('#mc #fn').value,cats:[...document.querySelectorAll('#mc .ck input:checked')].map(i=>i.value)};
@@ -1685,8 +1806,73 @@ const stat=m=>{window.SS=m;const e=$('#ss');if(e)e.textContent=ssText()};
 function dot(c){const e=$('#syd');if(e)e.className='syd '+c}
 function retrySync(){clearTimeout(window.syT);window.syT=setTimeout(()=>sync(),Math.min(60000,5000*2**Math.min(SY.fail,4)))}
 async function fullSync(){S.since=0;persist();await sync();toast('পুরো ডেটা আবার সিঙ্ক হয়েছে')}
-function authView(){$('#fab').style.display='none';$('#nv').innerHTML='';$('#pp').innerHTML='';$('header').style.display='none';
-$('#v').innerHTML='<div class="card auth"><div class="logo">T</div><h2>খরচের খাতা</h2><div class="sub">by Tanvir</div><input id="ae" type="email" placeholder="ইমেইল" autocomplete="email"><input id="ap" type="password" placeholder="পাসওয়ার্ড (৮+ অক্ষর)" autocomplete="current-password"><button class="p" style="width:100%" onclick="auth(\'login\')">লগইন</button><button class="s" style="width:100%;margin-top:8px" onclick="auth(\'register\')">নতুন অ্যাকাউন্ট খুলুন</button><p id="ax" class="mut"></p>'+cfgBlock('login')+'</div>'}
+let currentAuthMode='login';
+function togglePwVis(id,btn){const el=document.getElementById(id);if(!el)return;const isPw=el.type==='password';el.type=isPw?'text':'password';if(btn)btn.innerHTML=isPw?'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>':'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'}
+function authView(mode,opts){
+  mode=mode||currentAuthMode||'login';
+  currentAuthMode=mode;
+  opts=opts||{};
+  $('#fab').style.display='none';$('#nv').innerHTML='';$('#pp').innerHTML='';$('header').style.display='none';
+  const regMode=(CFG&&CFG.reg_mode)?CFG.reg_mode:'open';
+  const alertHtml=opts.alert?`<div class="auth-alert ${opts.alert.type}">${esc(opts.alert.text)}</div>`:'';
+  const eyeSvg='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const tabsHtml=`<div class="auth-tabs"><button type="button" class="auth-tab ${mode==='login'?'on':''}" onclick="authView('login')">🔐 লগইন</button><button type="button" class="auth-tab ${mode==='register'?'on':''}" onclick="authView('register')">📝 নতুন অ্যাকাউন্ট</button></div>`;
+  let h='';
+  if(mode==='login'){
+    const preEmail=opts.email||(S&&S.email)||'';
+    h=`<div class="card auth"><div class="logo">T</div><h2>খরচের খাতা</h2><div class="sub">by Tanvir</div>${tabsHtml}${alertHtml}<input id="ae" type="email" placeholder="ইমেইল অ্যাড্রেস" autocomplete="email" value="${esc(preEmail)}"><div class="auth-field-wrap"><input id="ap" type="password" placeholder="পাসওয়ার্ড (৮+ অক্ষর)" autocomplete="current-password"><button type="button" class="auth-pw-btn" onclick="togglePwVis('ap',this)" aria-label="পাসওয়ার্ড দেখুন">${eyeSvg}</button></div><button class="p" style="width:100%;margin-top:6px" onclick="doLogin()">লগইন করুন</button><button type="button" class="auth-switch-link" onclick="authView('register')">অ্যাকাউন্ট নেই? নতুন অ্যাকাউন্ট তৈরি করুন →</button><p id="ax" class="mut" style="margin-top:10px"></p>${cfgBlock('login')}</div>`;
+  }else{
+    let badge='';
+    if(regMode==='approval') badge='<div class="auth-alert warning">ℹ️ <b>অ্যাডমিন অনুমোদন আবশ্যক:</b> আবেদন জমা দেওয়ার পর অ্যাডমিন অনুমোদন করলে আপনি লগইন করতে পারবেন। অনুমোদনের পর আপনাকে ইমেইলে জানানো হবে।</div>';
+    else if(regMode==='closed') badge='<div class="auth-alert danger">⚠️ <b>নিবন্ধন সাময়িকভাবে বন্ধ:</b> বর্তমানে নতুন অ্যাকাউন্ট তৈরি বন্ধ আছে। অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।</div>';
+    else badge='<div class="auth-alert success">✓ নতুন অ্যাকাউন্ট তৈরি উন্মুক্ত। অ্যাকাউন্ট তৈরির পর লগইন করতে পারবেন।</div>';
+    h=`<div class="card auth"><div class="logo">T</div><h2>নতুন অ্যাকাউন্ট</h2><div class="sub">খরচের খাতায় স্বাগতম</div>${tabsHtml}${badge}${alertHtml}<div class="lb" style="text-align:left">পূর্ণ নাম (Full Name)</div><input id="rf-fn" type="text" placeholder="যেমন: তানভীর আহমেদ" autocomplete="name"><div class="lb" style="text-align:left">ডিসপ্লে নাম (Display Name)</div><input id="rf-dn" type="text" placeholder="অ্যাপে যে নাম দেখাবে (যেমন: তানভীর)" autocomplete="nickname"><div class="lb" style="text-align:left">ইমেইল অ্যাড্রেস (Email)</div><input id="rf-em" type="email" placeholder="name@example.com" autocomplete="email"><div class="lb" style="text-align:left">পাসওয়ার্ড (৮+ অক্ষর)</div><div class="auth-field-wrap"><input id="rf-pw" type="password" placeholder="কমপক্ষে ৮ অক্ষরের পাসওয়ার্ড" autocomplete="new-password"><button type="button" class="auth-pw-btn" onclick="togglePwVis('rf-pw',this)" aria-label="পাসওয়ার্ড দেখুন">${eyeSvg}</button></div><div class="lb" style="text-align:left">পাসওয়ার্ড নিশ্চিত করুন</div><div class="auth-field-wrap"><input id="rf-cp" type="password" placeholder="পাসওয়ার্ড পুনরায় লিখুন" autocomplete="new-password"><button type="button" class="auth-pw-btn" onclick="togglePwVis('rf-cp',this)" aria-label="পাসওয়ার্ড দেখুন">${eyeSvg}</button></div><button class="p" style="width:100%;margin-top:10px" onclick="doRegister()">${regMode==='closed'?'নিবন্ধন বর্তমানে বন্ধ':'অ্যাকাউন্ট তৈরি করুন'}</button><button type="button" class="auth-switch-link" onclick="authView('login')">ইতিমধ্যে অ্যাকাউন্ট আছে? লগইন করুন →</button><p id="ax-reg" class="mut" style="margin-top:10px;color:var(--bad)"></p>${cfgBlock('login')}</div>`;
+  }
+  $('#v').innerHTML=h;
+}
+async function doLogin(){
+  const em=($('#ae')?$('#ae').value:'').trim().toLowerCase();
+  const pw=($('#ap')?$('#ap').value:'');
+  if(!em||!pw){if($('#ax'))$('#ax').textContent='ইমেইল এবং পাসওয়ার্ড দুটিই দিন';return;}
+  await auth('login');
+}
+async function doRegister(){
+  const errEl=$('#ax-reg');if(errEl)errEl.textContent='';
+  const fn=($('#rf-fn')?$('#rf-fn').value:'').trim();
+  const dn=($('#rf-dn')?$('#rf-dn').value:'').trim();
+  const em=($('#rf-em')?$('#rf-em').value:'').trim().toLowerCase();
+  const pw=($('#rf-pw')?$('#rf-pw').value:'');
+  const cp=($('#rf-cp')?$('#rf-cp').value:'');
+  if(!fn){if(errEl)errEl.textContent='আপনার পূর্ণ নাম লিখুন';return;}
+  if(!em||!em.includes('@')){if(errEl)errEl.textContent='সঠিক ইমেইল অ্যাড্রেস লিখুন';return;}
+  if(!pw||pw.length<8){if(errEl)errEl.textContent='পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে';return;}
+  if(pw!==cp){if(errEl)errEl.textContent='দুটি পাসওয়ার্ড মিলছে না, নিশ্চিত হয়ে আবার লিখুন';return;}
+  let u;try{u=apiUrl('register')}catch(e){if(errEl)errEl.textContent='API URL কনফিগার করা নেই। অনুগ্রহ করে ব্যাকএন্ড URL দিন।';return;}
+  const btn=$('#v button.p');if(btn){btn.disabled=true;btn.textContent='অনুরোধ পাঠানো হচ্ছে…';}
+  try{
+    const dispNm=dn||fn.split(' ')[0]||fn;
+    const r=await fetchT(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fullname:fn,displayName:dispNm,email:em,password:pw})});
+    let d=null;try{d=await r.json()}catch(_){}
+    if(!r.ok||!d||d.error){
+      if(btn){btn.disabled=false;btn.textContent='অ্যাকাউন্ট তৈরি করুন';}
+      const errTxt=(d&&d.error)||(r.status===403?'নতুন অ্যাকাউন্ট নিবন্ধন বন্ধ আছে':'সার্ভারে সমস্যা হয়েছে (কোড '+r.status+')');
+      if(errEl)errEl.textContent=errTxt;toast(errTxt);return;
+    }
+    saveAcctVault(em,pw,fn,dispNm);
+    if(d.mode==='approval'){
+      showStatusPopup('pending','আবেদন সফল হয়েছে',d.message||'আপনার অ্যাকাউন্ট তৈরির আবেদন সফল হয়েছে! অ্যাডমিন অনুমোদন করলে আপনি লগইন করতে পারবেন। অনুমোদনের পর আপনাকে ইমেইলে জানানো হবে।',0,true);
+      authView('login',{email:em,alert:{type:'warning',text:'অ্যাকাউন্ট তৈরির আবেদন সফল হয়েছে! অ্যাডমিন অনুমোদন করলে আপনি লগইন করতে পারবেন। অনুমোদনের পর আপনাকে ইমেইলে জানানো হবে।'}});
+    }else{
+      toast('অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে ✓');
+      authView('login',{email:em,alert:{type:'success',text:'✓ আপনার অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে! অনুগ্রহ করে পাসওয়ার্ড দিয়ে লগইন করুন।'}});
+      const apInput=$('#ap');if(apInput)apInput.focus();
+    }
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='অ্যাকাউন্ট তৈরি করুন';}
+    const netErr=(e&&e.message==='timeout')?'সার্ভার সাড়া দিচ্ছে না (টাইমআউট)':'সার্ভারে যোগাযোগ করা যাচ্ছে না (ইন্টারনেট পরীক্ষা করুন)';
+    if(errEl)errEl.textContent=netErr;
+  }
+}
 function lockView(){$('#fab').style.display='none';$('#nv').innerHTML='';$('header').style.display='none';
 $('#v').innerHTML='<div class="card auth"><div class="logo">T</div><h2>লক করা আছে</h2><div class="sub">PIN দিন</div><input id="lp" type="password" inputmode="numeric" maxlength="4" autocomplete="off" style="text-align:center;font-size:24px;letter-spacing:10px" oninput="chkPin(this.value)"><button class="s" style="margin-top:16px" onclick="forgotPin()">PIN ভুলে গেছেন?</button></div>'}
 const chkPin=v=>{if(enNum(v)===PIN){unlocked=true;go()}};
@@ -1755,14 +1941,17 @@ else{if(!PIN){const n=await newPinDlg('PIN সেট করুন');if(!n)return
 async function chgPin(){const v=await ask({icon:'🔑',title:'PIN পরিবর্তন',fields:[PF('বর্তমান PIN'),PF('নতুন PIN'),PF('নতুন PIN আবার')],ok:'পরিবর্তন করুন'});if(v===null)return;const p0=enNum(v[0]),p1=enNum(v[1]),p2=enNum(v[2]);if(p0!==PIN)return toast('বর্তমান PIN ভুল');if(!/^\d{4}$/.test(p1))return toast('নতুন PIN ঠিক ৪টি সংখ্যার হতে হবে');if(p1!==p2)return toast('নতুন PIN দুটি মিলছে না');savePin(p1);go();toast('PIN পরিবর্তন হয়েছে ✓')}
 async function pickLT(){const v=await pick({title:'কখন লক হবে',options:Object.keys(LTL).map(k=>({v:k,label:LTL[k]})),value:String(LOCKT)});if(v!==null){LOCKT=+v;try{LS.setItem('kh_lockt',v)}catch(e){}go()}}
 async function forgotPin(){if(await ask({icon:'?',title:'PIN ভুলে গেছেন?',sub:'লগআউট করে আবার লগইন করলে PIN সরে যাবে। সার্ভারে সেভ হওয়া সব ডেটা ফিরে আসবে।',ok:'লগআউট করুন',danger:1})){await logout();savePin('');setLock(false);unlocked=true;go()}}
-async function chgPass(){const v=await ask({icon:'🔑',title:'পাসওয়ার্ড পরিবর্তন',sub:'অ্যাকাউন্টের লগইন পাসওয়ার্ড',fields:[{label:'বর্তমান পাসওয়ার্ড',type:'password'},{label:'নতুন পাসওয়ার্ড (৮+ অক্ষর)',type:'password'},{label:'নতুন পাসওয়ার্ড আবার',type:'password'}],ok:'পরিবর্তন করুন'});if(v===null)return;if(v[1].length<8)return toast('নতুন পাসওয়ার্ড ৮+ অক্ষরের হতে হবে');if(v[1]!==v[2])return toast('নতুন পাসওয়ার্ড দুটি মিলছে না');try{let u='api.php?a=passwd';try{u=apiUrl('passwd')}catch(_){}const r=await fetch(u,{method:'POST',headers:authHeaders(),body:JSON.stringify({token:tok,old:v[0],new:v[1]})});const d=await r.json().catch(()=>null);if(r.status==401){logout(true);return toast('লগইন মেয়াদ শেষ হয়েছে');}toast(r.ok?'পাসওয়ার্ড পরিবর্তন হয়েছে ✓':((d&&d.error)||'সমস্যা হয়েছে'))}catch(e){toast('ইন্টারনেট দরকার')}}
+function getVaultMap(){try{return JSON.parse(LS.getItem('kh_acct_vault')||'{}')||{}}catch(e){return{}}}
+function saveAcctVault(em,pw,fn,nm){try{const m=getVaultMap(),k=(em||'').trim().toLowerCase();if(!k)return;const p=m[k]||{};m[k]={email:k,pw_b64:pw?btoa(unescape(encodeURIComponent(pw))):(p.pw_b64||''),fullname:fn||p.fullname||'',name:nm||p.name||''};LS.setItem('kh_acct_vault',JSON.stringify(m))}catch(e){}}
+function getAcctVault(em){const m=getVaultMap(),k=(em||(S&&S.email)||'').trim().toLowerCase();return k?m[k]||null:null}
+async function chgPass(){const v=await ask({icon:'🔑',title:'পাসওয়ার্ড পরিবর্তন',sub:'অ্যাকাউন্টের লগইন পাসওয়ার্ড',fields:[{label:'বর্তমান পাসওয়ার্ড',type:'password'},{label:'নতুন পাসওয়ার্ড (৮+ অক্ষর)',type:'password'},{label:'নতুন পাসওয়ার্ড আবার',type:'password'}],ok:'পরিবর্তন করুন'});if(v===null)return;if(v[1].length<8)return toast('নতুন পাসওয়ার্ড ৮+ অক্ষরের হতে হবে');if(v[1]!==v[2])return toast('নতুন পাসওয়ার্ড দুটি মিলছে না');try{let u='api.php?a=passwd';try{u=apiUrl('passwd')}catch(_){}const r=await fetch(u,{method:'POST',headers:authHeaders(),body:JSON.stringify({token:tok,old:v[0],new:v[1]})});const d=await r.json().catch(()=>null);if(r.status==401){logout(true);return toast('লগইন মেয়াদ শেষ হয়েছে');}if(r.ok&&S&&S.email)saveAcctVault(S.email,v[1],'',NAME);toast(r.ok?'পাসওয়ার্ড পরিবর্তন হয়েছে ✓':((d&&d.error)||'সমস্যা হয়েছে'))}catch(e){toast('ইন্টারনেট দরকার')}}
 const greet=()=>{const h=new Date().getHours();return h<5?'শুভ রাত্রি':h<12?'শুভ সকাল':h<17?'শুভ দুপুর':h<19?'শুভ বিকাল':'শুভ সন্ধ্যা'};
 const QT=['আজকের ছোট হিসাব, আগামীর বড় নিশ্চিন্ততা।','প্রতিটি টাকার একটা গল্প থাকে — আপনি শুধু লিখে রাখুন।','গুছিয়ে রাখা হিসাবই সবচেয়ে বড় সঞ্চয়।','যা মাপা হয়, তা-ই ভালো হয়।','খরচে হিসাব, জীবনে স্বস্তি।'];
 function hideSp(){const e=$('#sp');e.classList.add('out');setTimeout(()=>{e.style.display='none';try{checkAdminPopupNotices()}catch(_){}},700)}
 $('#sq').textContent=QT[Math.floor(Math.random()*QT.length)];$('#sw').textContent=greet()+', '+NAME;window.spT=setTimeout(hideSp,4800);
 let hid=0;document.addEventListener('visibilitychange',()=>{if(document.hidden)hid=Date.now();else if(LOCK&&PIN&&Date.now()-hid>=LOCKT*1000){unlocked=false;go()}});
-async function auth(k){try{let u;try{u=apiUrl(k)}catch(urlErr){$('#ax').textContent='API URL কনফিগার করা নেই। অনুগ্রহ করে সঠিক ব্যাকএন্ড URL দিন।';return}const r=await fetchT(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('#ae').value,password:$('#ap').value})});let d=null;try{d=await r.json()}catch(_){}if(!r.ok||!d||!d.token)return $('#ax').textContent=(d&&d.error)||(r.status===403?'অননুমোদিত অরিজিন (CORS)':r.status===404?'API পাওয়া যায়নি (কোড 404)':r.status>=500?'সার্ভার ত্রুটি (কোড '+r.status+')':'সার্ভার ঠিকমতো উত্তর দেয়নি (Invalid JSON)');
-tok=d.token;LS.setItem('kh_t',tok);const em=($('#ae').value||'').trim().toLowerCase();if(S.email!==em){S={sym:'৳',parents:[],cats:[],exps:[],since:0,email:em};DEFG='';NAME='Tanvir';try{LS.removeItem('kh_defg');LS.removeItem('kh_name')}catch(e){}}else S.since=0;S.email=em;cur=null;FIRST=true;persist();try{await sync()}catch(syncErr){console.warn('Initial sync warning:',syncErr)}go()}catch(e){if(e&&e.message&&e.message.includes('API_URL_NOT_CONFIGURED')){$('#ax').textContent='API URL কনফিগার করা নেই। অনুগ্রহ করে সঠিক ব্যাকএন্ড URL দিন।'}else if(e&&e.message==='timeout'){$('#ax').textContent='সার্ভার সাড়া দিচ্ছে না (টাইমআউট)'}else{$('#ax').textContent='সার্ভারে যোগাযোগ করা যাচ্ছে না'}}}
+async function auth(k){try{let u;try{u=apiUrl(k)}catch(urlErr){$('#ax').textContent='API URL কনফিগার করা নেই। অনুগ্রহ করে সঠিক ব্যাকএন্ড URL দিন।';return}const emIn=($('#ae').value||'').trim().toLowerCase(),pwIn=$('#ap').value||'';const r=await fetchT(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:emIn,password:pwIn,vault:getAcctVault(emIn)})});let d=null;try{d=await r.json()}catch(_){}if(!r.ok||!d||!d.token)return $('#ax').textContent=(d&&d.error)||(r.status===403?'অননুমোদিত অরিজিন (CORS)':r.status===404?'API পাওয়া যায়নি (কোড 404)':r.status>=500?'সার্ভার ত্রুটি (কোড '+r.status+')':'সার্ভার ঠিকমতো উত্তর দেয়নি (Invalid JSON)');
+tok=d.token;LS.setItem('kh_t',tok);saveAcctVault(emIn,pwIn,d.fullname||'',d.name||NAME||'');if(S.email!==emIn){S={sym:'৳',parents:[],cats:[],exps:[],since:0,email:emIn};DEFG='';NAME=d.name||'Tanvir';try{LS.removeItem('kh_defg');if(d.name)LS.setItem('kh_name',d.name);else LS.removeItem('kh_name')}catch(e){}}else{S.since=0;if(d.name){NAME=d.name;try{LS.setItem('kh_name',d.name)}catch(e){}}}S.email=emIn;if(d.name)setPref('name',d.name);cur=null;FIRST=true;persist();try{await sync()}catch(syncErr){console.warn('Initial sync warning:',syncErr)}go()}catch(e){if(e&&e.message&&e.message.includes('API_URL_NOT_CONFIGURED')){$('#ax').textContent='API URL কনফিগার করা নেই। অনুগ্রহ করে সঠিক ব্যাকএন্ড URL দিন।'}else if(e&&e.message==='timeout'){$('#ax').textContent='সার্ভার সাড়া দিচ্ছে না (টাইমআউট)'}else{$('#ax').textContent='সার্ভারে যোগাযোগ করা যাচ্ছে না'}}}
 async function logout(f){
   if(!f){
     await sync();
@@ -1800,7 +1989,7 @@ async function sync(){if(!tok)return;if(busy){if(Date.now()-(SY.t||0)<60000)retu
 try{let u;try{u=apiUrl('sync')}catch(urlErr){throw(urlErr&&urlErr.message&&urlErr.message.includes('API_URL'))?'API URL কনফিগার করা নেই':urlErr.message}
 S.prefs=S.prefs||[];const snap=new Map();let room=200,left=false;
 const pick=a=>{const o=[];for(const x of a){if(!x._d)continue;if(room<=0){left=true;break}room--;snap.set(x.id,x.updated);const{_d,...r}=x;o.push(r)}return o};
-const body=JSON.stringify({token:tok,since:FIRST?0:(S.since||0),parents:pick(S.parents),cats:pick(S.cats),exps:pick(S.exps),prefs:pick(S.prefs)});
+const body=JSON.stringify({token:tok,since:FIRST?0:(S.since||0),vault:getAcctVault(S.email),parents:pick(S.parents),cats:pick(S.cats),exps:pick(S.exps),prefs:pick(S.prefs)});
 let r;try{r=await fetchT(u,{method:'POST',headers:authHeaders(),body})}catch(e){throw e&&e.message==='timeout'?'সার্ভার সাড়া দিচ্ছে না (টাইমআউট)':'ইন্টারনেট নেই'}
 if(r.status==401){busy=0;toast('সেশন শেষ হয়েছে — আবার লগইন করুন');return logout(true)}
 if(r.status==403){let d=null;try{d=await r.json()}catch(_){}if(d&&d.error==='untrusted_origin')throw'অননুমোদিত অরিজিন (CORS 403)';if(d&&(d.error==='invalid_token'||d.error==='token_expired'||d.error==='account_disabled')){busy=0;toast('অনুমোদন নেই — আবার লগইন করুন');return logout(true)}throw(d&&d.error)||'অনুমোদন নেই (কোড 403)'}
@@ -1845,6 +2034,10 @@ let rejCount=0;
 let ch=false;
 [[S.parents,d.parents],[S.cats,d.cats],[S.exps,d.exps],[S.prefs,d.prefs||[]]].forEach(([loc,inc])=>inc.forEach(i=>{const l=loc.find(x=>x.id==i.id);if(!l){loc.push(i);ch=true}else if(!l._d){if(l.updated!==i.updated||l.deleted!==i.deleted||l.name!==i.name||l.amt!==i.amt||l.v!==i.v||l.desc!==i.desc||l.note!==i.note||l.dt!==i.dt||l.tm!==i.tm||l.pid!==i.pid||l.parent!==i.parent)ch=true;Object.assign(l,i)}}));
 applyPrefs();S.since=d.since;if(FIRST&&!d.more){try{LS.setItem('kh_lf',Date.now())}catch(e){}}FIRST=false;IDLE=(ch||snap.size)?0:IDLE+1;
+if(d.resync_all&&(S.parents||[]).some(p=>!p.deleted)&&snap.size===0){
+  [S.parents,S.cats,S.exps,S.prefs||[]].forEach(arr=>arr.forEach(x=>{x._d=1}));
+  S.since=0;FIRST=true;again=1;
+}
 if(left||d.more)again=1;
 if(!d.more&&!S.parents.some(p=>!p.deleted)){seed();again=1;ch=true}
 if(!d.more&&seedPrefs()){again=1;ch=true}
@@ -2164,7 +2357,7 @@ bar.forEach(n=>{if(+n.secs>0&&!SCH.has(n.id)){SCH.add(n.id);setTimeout(()=>dismi
 $('#ftn').innerHTML=ntList('footer').map(ntCard).join('');$('#fts').innerHTML=socRow('footer');
 applyWelcome();applyBrand();checkAdminPopupNotices();checkAppUpdate();
 if(fresh===true){const m=(CFG&&CFG.maint)||{},e=$('#mt');if(m.on){e.innerHTML=`<div class="mtc"><div class="mti">⚙</div><h2>সাময়িকভাবে বন্ধ</h2><p>${esc(m.msg||'কিছু কাজ চলছে। একটু পরে আবার চেষ্টা করুন।')}</p><button class="p" onclick="location.reload()">আবার চেষ্টা করুন</button></div>`;e.style.display='flex'}else{e.style.display='none'}}
-if(!tok&&!(($('#ae')||{}).value)&&!(($('#ap')||{}).value))authView()}
+if(!tok&&!isUserInputActive()&&!(($('#ae')||{}).value)&&!(($('#ap')||{}).value)&&!(($('#rf-fn')||{}).value)&&!(($('#rf-em')||{}).value))authView(currentAuthMode)}
 async function loadCfg(){try{const r=await fetchT(apiUrl('config'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vid:VID})});if(!r.ok)return;CFG=await r.json();try{LS.setItem('kh_cfg',JSON.stringify(CFG))}catch(e){}applyCfg(true);checkAdminPopupNotices();checkAppUpdate()}catch(e){}}
 applyCfg();loadCfg();
 applyPrefs();go();sync();pingLoop();
