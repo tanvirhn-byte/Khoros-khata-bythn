@@ -1,0 +1,160 @@
+================================================================================
+KHOROCH ER KHATA — PHASE 9: CORE EXPENSE TRACKER VERIFICATION REPORT
+Status: COMPLETED, FULLY AUDITED & VERIFIED (Awaiting Approval for Phase 10)
+Date: October 2026
+================================================================================
+
+1. PHASE STATUS & EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+Phase 9 audits, hardens, and verifies all core expense tracking, group management,
+hierarchical category modeling, dashboard metrics, reports, budgets, backup/restore,
+and data integrity mechanisms across the application.
+Every expense CRUD operation preserves composite identities without duplicate records.
+Groups enforce strict single-group safeguards (the last remaining group can never be
+deleted). Category parent-child trees correctly aggregate in reports and cleanly
+cascade deletions. Multi-user database isolation, offline transaction queuing,
+and LocalStorage quota safety are 100% confirmed.
+
+Strict Rules Maintained:
+- Preserved 100% of existing UI, layout, colors, and design.
+- No new features added (Income, Financial Goals, etc. strictly postponed).
+- Database architecture and composite primary keys (user_id, id) preserved.
+- Zero unrelated changes; existing functionality fully preserved.
+- Phase 10 has NOT been started.
+
+
+2. FILES INSPECTED AND VERIFIED
+--------------------------------------------------------------------------------
+Inspected & Verified:
+- /public/khoroch/index.html & /khoroch/index.html
+  - Transaction form `openForm()`, validation `sv()`, in-place editing, and `del()`
+  - Group creation `addParent()`, rename `renParent()`, safe deletion `delParent()`, and deduplication `mergeDup()`
+  - Category creation `addCat()`, rename `ren()`, and recursive deletion `delCat()`
+  - Dashboard calculations `vd()`, list filtering `fl()`, pagination `pager()`, and reports `vr()`
+  - Budget progress and overage alerts in `vd()` and `setBudget()`
+  - LocalStorage persistence `persist()`, backup download `dl()`, and file restore `imp()`
+- /public/khoroch/api.php & /khoroch/api.php
+- /tmp/test_phase9_core_expense_tracker.py (12-category automated test suite)
+- /phase9-report.txt & /public/phase9-report.txt
+- /src/App.tsx (Preview Portal updated automatically with Phase 9 tab)
+
+
+3. VERIFIED FEATURES & FUNCTIONALITY
+--------------------------------------------------------------------------------
+1. Core Expense Management:
+   - Expense Creation: Unique ID generated (`uid()`), active group assigned (`pid: cur`),
+     dirty flag tagged (`_d: 1`), and stored immediately in local state.
+   - Expense Editing: In-place record update by ID; preserves creation timestamp and
+     updates dirty flag without generating duplicate entries.
+   - Expense Deletion: Soft deletion via tombstone (`deleted = 1`); immediately excluded
+     from active lists, dashboard, and reports with reversible 1-click Undo toast.
+   - Search & Filter: Case-insensitive query against description, note, and amount;
+     category tree matching; month prefix matching; exact date matching; minimum amount.
+
+2. Groups and Categories:
+   - Group Safeguard: `delParent()` checks active groups: `if (active.length < 2) return toast(...)`.
+     The user is strictly prevented from deleting their only remaining group.
+   - Hierarchical Categories: Supports nested parent-child trees (e.g. Education › Exam Fee).
+   - Recursive Deletion: Deleting a parent category automatically marks all descendants
+     deleted and strips deleted category references from existing expenses.
+
+3. Dashboard and Reports:
+   - Period Summaries: Accurate calculations for "This Week", "This Month", "This Year",
+     transaction count, daily average, and largest single expense.
+   - Month-over-Month Comparison: Percentage difference against preceding month's total.
+   - Category Breakdown: Conic-gradient donut chart and bar charts with accurate sums.
+   - Reports: Dynamic modes (All Time, Year, Month, Week) with recursive category tree
+     aggregation (`ctree`) and CSV/Print exports.
+
+4. Budget & Financial Features:
+   - Monthly Budget: Set and stored per active group (`S.budget[cur]`).
+   - Progress Indicators: Visual progress bar with color shifts (teal under 80%, yellow
+     under 100%, red when exceeded).
+   - Accurate Balance: Real-time calculation of remaining monthly budget or exceeded amount.
+   - Backup & Restore: Full JSON export and strict schema-validated JSON import.
+
+5. Data Integrity & Usability:
+   - Storage Resilience: Safe persistence with QuotaExceededError warning banner.
+   - Offline Queuing: Offline expenses retain dirty flag (`_d = 1`) and sync cleanly.
+   - Bengali Localization: Formatted with Bengali month names, standard currency symbol
+     ('৳' or custom), and Indian comma grouping.
+
+
+4. VERIFICATION TEST SUITE & ACTUAL RESULTS (12/12 PASSED)
+--------------------------------------------------------------------------------
+All 12 test suites executed via automated test harness:
+
+[TEST 1] Expense CRUD:
+- Target: Create, read, in-place edit, and tombstone deletion.
+- Result: Record created with _d=1; in-place edit updated fields without duplicate IDs; tombstone deleted=1 verified.
+- Status: PASS
+
+[TEST 2] Groups CRUD & Last Group Protection:
+- Target: Create, rename, delete, and 1-group deletion prevention.
+- Result: System prohibits deleting last remaining group; permits deletion when 2+ groups exist.
+- Status: PASS
+
+[TEST 3] Categories CRUD & Hierarchy:
+- Target: Root category, subcategories, recursive kids/desc calculation, cascading deletion.
+- Result: Descendants correctly resolved; deleting parent removes child categories and expense tags.
+- Status: PASS
+
+[TEST 4] Search and Filtering:
+- Target: Query text, category hierarchy, month, date, and minimum amount.
+- Result: All filters return exact matching subset; sorting by date/time verified.
+- Status: PASS
+
+[TEST 5] Dashboard Calculations:
+- Target: Week, month, year totals, transaction count, daily average, and max expense.
+- Result: Oct total (1,410.0), Year total (1,460.0), Max (850.0), and daily average match record sums.
+- Status: PASS
+
+[TEST 6] Reports and Category Aggregations:
+- Target: Recursive parent category aggregation (subcategories included in parent sums).
+- Result: Education total includes Exam Fee; category tree matches overall total.
+- Status: PASS
+
+[TEST 7] Budget Calculations:
+- Target: Percentage used, remaining balance, and overage alerts.
+- Result: 70.5% (590 remaining) on 2000 budget; 141% (410 exceeded) on 1000 budget verified.
+- Status: PASS
+
+[TEST 8] Backup and Restore:
+- Target: JSON export structure, valid import restoration, invalid file rejection.
+- Result: Complete state exported; valid file restores state; corrupt/non-backup rejected safely.
+- Status: PASS
+
+[TEST 9] LocalStorage Persistence & Quota Safety:
+- Target: Serialization, state reload, and QuotaExceededError handling.
+- Result: State persists across sessions; quota overflow caught gracefully with user warning.
+- Status: PASS
+
+[TEST 10] Offline and Online Expense Handling:
+- Target: Offline creation with dirty flags and post-sync confirmation clearing.
+- Result: Offline expense queued with _d=1; server confirmation safely clears _d.
+- Status: PASS
+
+[TEST 11] Multi-User Data Isolation:
+- Target: User A vs User B records, groups, and IDOR query isolation in SQLite.
+- Result: Cross-user query returns 0 rows; user data completely isolated.
+- Status: PASS
+
+[TEST 12] Regression Tests:
+- Target: Bengali currency formatting, custom currency symbols, Bengali month labels.
+- Result: Number formatting, symbol updates, and Bengali localization verified.
+- Status: PASS
+
+Outcome: 12/12 TESTS PASSED (100% Success Rate).
+
+
+5. REMAINING LIMITATIONS
+--------------------------------------------------------------------------------
+- Income Tracking and Financial Goals remain deliberately excluded in accordance
+  with the Phase 2 Architecture Blueprint.
+- Premium UI Polish and custom micro-animations are scheduled for Phase 14.
+- All core expense tracking, budgeting, and reporting functionalities are verified,
+  resilient, and complete.
+
+================================================================================
+END OF PHASE 9 REPORT
+================================================================================

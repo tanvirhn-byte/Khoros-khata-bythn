@@ -1,0 +1,46 @@
+{
+  "id": "/khoroch/",
+  "name": "খরচের খাতা · Tanvir",
+  "short_name": "খরচের খাতা",
+  "description": "সহজ, নির্ভরযোগ্য ও অফলাইন-ফার্স্ট খরচ ট্র্যাকার",
+  "start_url": "index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#090E17",
+  "theme_color": "#090E17",
+  "categories": ["finance", "productivity", "utilities"],
+  "lang": "bn",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

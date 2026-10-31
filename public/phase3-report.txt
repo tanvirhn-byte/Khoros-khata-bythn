@@ -1,0 +1,96 @@
+================================================================================
+KHOROCH ER KHATA — PHASE 3 COMPLETION REPORT
+Document: phase3-report.txt
+Date: 2026-10-30
+Status: COMPLETED (Awaiting Approval to Begin Phase 4)
+================================================================================
+
+1. PHASE STATUS
+--------------------------------------------------------------------------------
+Phase: PHASE 3 — Code Quality and Bug Fixes
+Status: 100% Complete & Verified against Phase 2 Architecture Blueprint.
+
+
+2. FILES CHANGED
+--------------------------------------------------------------------------------
+1. khoroch/index.html (and public/khoroch/index.html)
+   - Added centralized `API_CONFIG` resolver and `apiUrl(action)` helper.
+   - Replaced all 8 hardcoded `api.php?a=...` network calls with `apiUrl(...)`.
+   - Added native Capacitor URL validation with fail-fast error `API_URL_NOT_CONFIGURED`.
+   - Updated `persist()` with explicit `QuotaExceededError` detection and user warning toast.
+   - Enforced immediate synchronous persistence for all transaction mutations.
+   - Added 5-level priority hardware back button integration hook for Capacitor.
+   - Preserved 100% of existing UI, CSS styles, colors, layout, and UX behavior.
+
+
+3. IMPORTANT CHANGES MADE
+--------------------------------------------------------------------------------
+A. Centralized API Base URL Resolver:
+   - Evaluates platform environment via `isNativePlatform()`.
+   - On Web (cPanel / browser): Deterministically defaults to same-origin `'api.php'`.
+   - On Capacitor Native APK: Reads from `window.KHOROCH_API_URL` or `kh_api_url`.
+   - Fail-Fast Native Safety: Throws descriptive `API_URL_NOT_CONFIGURED` if an
+     unconfigured placeholder is detected on native platforms, preventing silent
+     degradation to invalid relative URLs.
+
+B. Immediate Persistence & Quota Safety:
+   - Zero Debounce: Transaction mutations (Add, Edit, Delete, Duplicate) write
+     synchronously and immediately to `localStorage` via `persist()`.
+   - Quota Guard: Traps `QuotaExceededError` and `NS_ERROR_DOM_QUOTA_REACHED`.
+     Displays a non-intrusive, actionable warning toast alert to notify the user.
+
+C. Hardware Back Button Hook:
+   - Implemented `handleHardwareBack()` with strict priority resolution:
+     * Priority 1: Close active `#dg` confirmation/prompt dialog.
+     * Priority 2: Close active `#md` expense entry bottom sheet.
+     * Priority 3: Close active `#pk` item picker modal.
+     * Priority 4: Return to Home tab (`'d'`) if on another tab.
+     * Priority 5: Allow native app exit if already on Home tab.
+   - Registered Capacitor App plugin listener `App.addListener('backButton')`.
+
+
+4. TESTS PERFORMED & ACTUAL RESULTS
+--------------------------------------------------------------------------------
+Test 1: JavaScript Syntax & Structure
+- Method: Executed `node --check` and AST brace/parenthesis balance analysis.
+- Result: PASSED (0 syntax errors, 0 unbalanced tokens).
+
+Test 2: Web API URL Resolution
+- Method: Evaluated `apiUrl('sync')` under simulated Web browser environment.
+- Result: PASSED (Returned `'api.php?a=sync'`).
+
+Test 3: Capacitor Native Fail-Fast Validation
+- Method: Evaluated `apiUrl('sync')` under Capacitor native mock with unconfigured URL.
+- Result: PASSED (Threw `API_URL_NOT_CONFIGURED: Native Android APK requires a valid backend URL`).
+
+Test 4: Capacitor Configured URL Resolution
+- Method: Evaluated `apiUrl('sync')` with `KHOROCH_API_URL = 'https://myserver.com/api.php'`.
+- Result: PASSED (Returned `'https://myserver.com/api.php?a=sync'`).
+
+Test 5: LocalStorage Quota Exceeded Error Handling
+- Method: Injected simulated `QuotaExceededError` into `persist()`.
+- Result: PASSED (Caught safely without crashing; triggered Bengali warning toast).
+
+Test 6: Hardware Back Button Priority Queue
+- Method: Simulated clicks across Dialog `#dg`, Sheet `#md`, Sub-tab `'l'`, and Home tab `'d'`.
+- Result: PASSED (Dismissed dialogs in order; returned to Home tab; returned false on Home).
+
+Unverified in this Phase:
+- Physical Android hardware back button click on a real device (requires Phase 16 APK build).
+
+
+5. REMAINING RISKS OR LIMITATIONS
+--------------------------------------------------------------------------------
+1. Backend CORS & Logout Endpoint: The PHP backend (`api.php`) still needs CORS
+   preflight headers and the `?a=logout` endpoint (scheduled for Phase 5 & 7).
+2. Database Checkpoint Verification: Automated WAL checkpointing in `admin.php`
+   is scheduled for Phase 4.
+
+
+6. RECOMMENDED NEXT STEP
+--------------------------------------------------------------------------------
+Proceed to PHASE 4 — Database Hardening:
+- Implement `VACUUM INTO` and verified `PRAGMA wal_checkpoint(TRUNCATE)` in `admin.php`.
+- Audit table indexes and multi-device tombstone retention logic.
+- Verify zero database deadlocks under `BEGIN IMMEDIATE TRANSACTION`.
+================================================================================

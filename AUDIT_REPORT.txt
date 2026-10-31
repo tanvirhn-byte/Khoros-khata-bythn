@@ -1,0 +1,249 @@
+================================================================================
+KHOROCH ER KHATA (খরচের খাতা) — COMPLETE PROJECT AUDIT REPORT
+Phase 1: Project Audit & Technical Architecture Review
+Date: 2026-10-30
+Author: Senior Full-Stack Software Architect
+Status: COMPLETED (Awaiting Client Approval to begin Phase 2)
+================================================================================
+
+1. EXECUTIVE SUMMARY & ARCHIVE VERIFICATION
+--------------------------------------------------------------------------------
+Archive inspected: khoroch_new_theme_finallll_5ef5b85c.zip
+Total uncompressed files: 11 files (208,949 bytes)
+
+File Inventory:
+- index.html (97,565 bytes / 601 lines):
+  Complete single-page web client containing HTML markup, embedded CSS 
+  styles, and 55KB of embedded vanilla JavaScript.
+- api.php (21,865 bytes / 274 lines):
+  Backend PHP script providing JSON endpoints for synchronization, 
+  authentication, system configuration, and SQLite database operations.
+- admin.php (70,478 bytes / 625 lines):
+  Self-contained administration panel with responsive UI, session auth,
+  user management, announcement notices, error logs, and metrics.
+- manifest.json (360 bytes):
+  Web App Manifest defining PWA installation properties and colors.
+- sw.js (528 bytes):
+  Service Worker handling offline shell and runtime resource caching.
+- icon-192.png (2,060 bytes) & icon-512.png (8,046 bytes):
+  PWA and web application icons (PNG format).
+- .htaccess (67 bytes):
+  Web server directory configuration and index handling.
+- data/.htaccess (131 bytes):
+  Apache access control rule blocking HTTP access to SQLite database.
+- data/index.html (1 byte):
+  Directory traversal prevention placeholder.
+- README.txt (7,848 bytes):
+  cPanel deployment documentation and feature usage guide.
+
+Summary Assessment:
+The project is an offline-first expense management system with two-way
+incremental synchronization backed by SQLite. The visual design features a
+modern dark-teal aesthetic with Bengali typography (Hind Siliguri) and Inter.
+The core offline sync engine is functional for web browsers, but critical gaps
+exist regarding Android Capacitor support, CORS, API base URL configuration,
+and token expiration.
+
+
+================================================================================
+2. COMPONENT-BY-COMPONENT AUDIT
+================================================================================
+
+A. FRONTEND ARCHITECTURE (index.html)
+--------------------------------------------------------------------------------
+- Structure:
+  Monolithic single file. No build step (no Vite/Webpack required on cPanel).
+  HTML markup, CSS rules, and JavaScript logic are bundled together. All dynamic
+  views are constructed using template literals and DOM innerHTML.
+- Styling & Themes:
+  Clean CSS custom variables (--bg, --card, --ink, --ac, --ac2).
+  Automatic dark/light mode via prefers-color-scheme, plus manual toggle
+  (:root[data-theme="dark"]).
+  Mobile-first layout with safe area padding: env(safe-area-inset-top).
+- Navigation:
+  Sticky header with group selector, 5-tab bottom navigation bar:
+  (1) Home (হোম)
+  (2) Expenses (খরচ)
+  (3) Reports (রিপোর্ট)
+  (4) Categories (ক্যাটাগরি)
+  (5) Settings (সেটিংস)
+  Includes a floating action button (FAB) for adding new transactions.
+- Forms & Modals:
+  Custom modal dialogs (#cm for confirmations, #sf for expense entry,
+  and #ask for input prompts). Form validation triggers immediate visual toasts.
+- Performance:
+  Extremely lightweight and fast on mobile devices due to low DOM overhead
+  and lack of heavy JavaScript libraries.
+- Limitations:
+  Hardcoded relative paths ('api.php?a=...') break when running inside
+  Capacitor on Android. Missing ARIA attributes on some interactive dialogs.
+
+
+B. BACKEND ARCHITECTURE (api.php)
+--------------------------------------------------------------------------------
+- Architecture:
+  Single-file procedural PHP API. Dispatches actions using query parameter ?a=.
+- HTTP Protocol & Methods:
+  All state-changing actions use POST with JSON body payloads.
+  Inconsistency: tokens are accepted in both POST body and $_GET['token'].
+- Endpoints Implemented:
+  * ?a=health   -> GET/POST health probe returns {"ok": true}.
+  * ?a=register -> User registration with password hashing and IP rate limiting.
+  * ?a=login    -> User authentication with rate limiting and status checks.
+  * ?a=config   -> System announcements, notices, social links, and visitor ping.
+  * ?a=ping     -> Lightweight revision check for incremental updates.
+  * ?a=sync     -> Two-way incremental sync with last-write-wins conflict resolution.
+  * ?a=passwd   -> Current user password change and token invalidation.
+  * ?a=delacct  -> Account deletion requiring password and universal delete code.
+  * ?a=report   -> SQL recursive category aggregation (not currently called by frontend).
+- Critical Finding — CORS Support Missing:
+  api.php contains ZERO CORS headers (Access-Control-Allow-Origin) and does
+  not handle OPTIONS preflight requests. In Capacitor Android (where origin is
+  http://localhost or capacitor://localhost), network requests will be blocked.
+- Authentication & Tokens:
+  Uses 64-character random hex tokens hashed via SHA-256 in the tokens table.
+  Bug: Tokens have no expiration time. The tokens table has a 'created' field,
+  but verification queries never check age.
+- Logout Limitation:
+  Frontend logout() deletes local token from localStorage but does NOT call
+  the server to delete the token from the tokens table. There is no ?a=logout.
+- Error Handling:
+  display_errors is disabled (0). Errors are appended to data/error.log.
+  Client receives a generic JSON 500 error, preventing sensitive data leaks.
+
+
+C. DATABASE ARCHITECTURE (SQLite via PDO)
+--------------------------------------------------------------------------------
+- Database Engine: SQLite 3 via PDO (pdo_sqlite).
+- Concurrency Configuration:
+  * WAL mode active: PRAGMA journal_mode=WAL;
+  * Busy timeout: PRAGMA busy_timeout=8000;
+  * Application-level retry loop (up to 4 attempts) for database contention.
+- Tables & Schema (PRAGMA user_version = 6):
+  * users: id (PK), email (UNIQUE), hash, rev, created, synced, status
+  * tokens: token_hash (PK), user_id, created
+  * groups_: user_id, id, name, updated, deleted, rev (PK: user_id, id)
+  * categories: user_id, id, group_id, parent, name, updated, deleted, rev (PK: user_id, id)
+  * expenses: user_id, id, group_id, amount, date, time, descr, note, updated, deleted, rev (PK: user_id, id)
+  * expense_categories: user_id, expense_id, category_id (PK: user_id, expense_id, category_id)
+  * prefs: user_id, id, v, updated, deleted, rev (PK: user_id, id)
+  * settings: k (PK), v
+  * logs: id (PK), t, type, who, ip
+  * visits: day, vid, hits, last, plat (PK: day, vid)
+- Indexes:
+  * ix_logs ON logs(type, ip, t)
+  * ix_exp ON expenses(user_id, group_id, date)
+- Foreign Keys:
+  PRAGMA foreign_keys = ON is NOT enabled. Referential integrity is handled
+  at application level.
+- Multi-User Isolation:
+  Every query on user tables strictly filters by user_id = ?. User A cannot
+  query or modify User B's records.
+- SQLite vs MySQL Suitability:
+  SQLite + WAL is completely appropriate and recommended for this project.
+  It is zero-maintenance on cPanel, cannot crash independently from PHP, and
+  allows instant backups simply by copying data/khoroch.sqlite. No MySQL migration
+  is needed.
+
+
+D. FEATURE IMPLEMENTATION STATUS MATRIX
+--------------------------------------------------------------------------------
+Feature                       | Status                | Notes
+------------------------------|-----------------------|---------------------------------
+Income Management             | MISSING               | Only expenses are tracked. No income models.
+Expense Management            | FULLY IMPLEMENTED     | CRUD, dates, times, notes, categories.
+Transactions History          | FULLY IMPLEMENTED     | 10 per page, search, filters, details.
+Categories & Subcategories    | FULLY IMPLEMENTED     | Recursive tree (parent ID), many-to-many.
+Category Groups               | FULLY IMPLEMENTED     | Independent groups, group switcher, merge tool.
+Budgets                       | PARTIALLY IMPLEMENTED | Per-group monthly budget exists and syncs.
+Financial Goals               | MISSING               | No savings targets or goal tracking.
+Reports                       | FULLY IMPLEMENTED     | Aggregated by Year/Month/Week/Range.
+Charts                        | FULLY IMPLEMENTED     | Custom lightweight CSS bar visualization.
+Statistics                    | FULLY IMPLEMENTED     | Previous month comparison, top categories.
+Search and Filters            | FULLY IMPLEMENTED     | Real-time search by description, amount, cat.
+Backup and Restore            | FULLY IMPLEMENTED     | JSON backup/import, CSV export, SQLite copy.
+User Accounts                 | PARTIALLY IMPLEMENTED | Login, register, delete account exist.
+                              |                       | Missing: self-service password reset.
+Admin Dashboard               | FULLY IMPLEMENTED     | Metrics, notices, user status, logs, backup.
+User Management               | FULLY IMPLEMENTED     | Search, approve, block, reset pw, force logout.
+Notifications and Notices     | FULLY IMPLEMENTED     | Time-based, audience-filtered, multi-location.
+Settings                      | FULLY IMPLEMENTED     | Name, currency symbol, dark theme, PIN lock.
+
+
+E. PWA & OFFLINE CAPABILITIES AUDIT
+--------------------------------------------------------------------------------
+- manifest.json:
+  Configured for standalone display, dark theme color (#0A1627).
+  Needs improvement: Remove hardcoded name "Tanvir", add description, id,
+  orientation, and separate 'any' and 'maskable' icon definitions.
+- Service Worker (sw.js):
+  Uses cache 'kh-v1'. Currently only caches scope during installation.
+  Fails to precache index.html, manifest.json, icons, and Google Fonts.
+- Offline Capability Evaluation:
+  1. Opening App Offline: Works only if previously visited and cached in runtime.
+  2. Reading Data Offline: FULLY WORKING. All data loads from localStorage (kh_s).
+  3. Creating Transactions Offline: FULLY WORKING. Saved with dirty flag (_d=1).
+  4. Syncing Offline Changes: FULLY WORKING. Auto-syncs when connection returns.
+
+
+F. SECURITY AUDIT
+--------------------------------------------------------------------------------
+1. SQL Injection:
+   PROTECTED. PDO prepared statements with bound parameters used throughout.
+2. Cross-Site Scripting (XSS):
+   PROTECTED. Frontend utilizes esc() helper; admin.php utilizes htmlspecialchars().
+3. Cross-Site Request Forgery (CSRF):
+   Admin panel is protected with CSRF tokens. API relies on JSON POST bodies.
+4. Token & Session Management:
+   VULNERABILITY: Tokens in 'tokens' table never expire.
+   VULNERABILITY: Logout does not revoke token on server.
+   RISK: api.php accepts token from $_GET query string, risking server log exposure.
+5. Database Protection:
+   Protected on Apache via data/.htaccess.
+   RISK: On NGINX or static web servers, data/khoroch.sqlite is directly exposed.
+6. Hardcoded Credentials:
+   Default DELETE_CODE = 'TanvirX' and ADMIN_PASS = 'CHANGE_ME_NOW' in source code.
+7. Rate Limiting:
+   Active on login failures (5 per 15 min) and registrations (5 per hour per IP).
+
+
+G. CAPACITOR & ANDROID APK READINESS AUDIT
+--------------------------------------------------------------------------------
+1. API URL Configuration:
+   index.html hardcodes relative 'api.php' calls. Must be refactored to support
+   a configurable API_BASE_URL (remote domain for APK, relative for web).
+2. CORS Headers:
+   api.php must add Access-Control-Allow-Origin, Headers, and OPTIONS handler.
+3. Android Hardware Back Button:
+   Needs listener to close active modals/sheets rather than killing the app.
+4. Status Bar & Splash Screen:
+   Requires Capacitor StatusBar and SplashScreen plugin configuration.
+
+
+================================================================================
+3. MASTER DEVELOPMENT ROADMAP & CHECKLIST
+================================================================================
+
+[x] PHASE 1  — Complete Project Audit (Completed)
+[ ] PHASE 2  — Architecture and Planning (NEXT)
+[ ] PHASE 3  — Code Quality and Bug Fixes
+[ ] PHASE 4  — Database
+[ ] PHASE 5  — Authentication
+[ ] PHASE 6  — Multi-user Data Isolation
+[ ] PHASE 7  — Backend API
+[ ] PHASE 8  — Frontend and API Integration
+[ ] PHASE 9  — Core Expense Tracker Features
+[ ] PHASE 10 — Online Synchronization
+[ ] PHASE 11 — Offline Functionality
+[ ] PHASE 12 — PWA Completion
+[ ] PHASE 13 — Admin Dashboard
+[ ] PHASE 14 — Security and Performance
+[ ] PHASE 15 — Production Hosting
+[ ] PHASE 16 — Capacitor Integration
+[ ] PHASE 17 — Android Testing
+[ ] PHASE 18 — GitHub and Cloud Build
+[ ] PHASE 19 — Final Release
+
+================================================================================
+END OF AUDIT REPORT
+================================================================================

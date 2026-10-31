@@ -1,0 +1,122 @@
+================================================================================
+KHOROCH ER KHATA — PHASE 5: AUTHENTICATION & SECURITY REPORT (UPDATED)
+Status: COMPLETED & VERIFIED (Awaiting User Approval for Phase 6)
+Date: October 2026
+================================================================================
+
+1. PHASE STATUS & OVERVIEW
+--------------------------------------------------------------------------------
+Phase 5 (Authentication & Security) has been reviewed and corrected per strict specifications.
+All token expiration policies, immutable timestamp separation, server-side revocation,
+and client-side normal vs. best-effort sendBeacon logout flows have been verified.
+
+No UI was redesigned. No new user features were introduced.
+Existing offline storage, multi-device sync, and visual design remain 100% intact.
+
+
+2. ISSUES REVIEWED & IMPLEMENTED
+--------------------------------------------------------------------------------
+ISSUE 1: TOKEN EXPIRATION & TIMESTAMP SEPARATION
+- Policy Defined: 90-Day Inactivity Expiration Policy.
+  * An active session remains valid as long as the user accesses the app at least once every 90 days.
+  * If a session is inactive for > 90 consecutive days (7,776,000 seconds), it expires, is purged
+    from the SQLite database, and returns HTTP 401.
+- Immutable Creation Timestamp (`created`):
+  * Recorded once upon token generation in `newToken()`.
+  * NEVER modified or overwritten. True token provenance is permanently preserved.
+- Activity Timestamp (`last_seen`):
+  * Separated into its own column `tokens.last_seen`.
+  * Initialized to creation time on login/registration.
+  * When an authenticated request arrives, if `(now - last_seen) > 86400` (24-hour throttling to
+    prevent write amplification and SQLite disk lock contention), `last_seen` is updated to `now`.
+- Safe, Non-Destructive Schema Evolution:
+  * Table schema updated: `CREATE TABLE IF NOT EXISTS tokens(token_hash TEXT PRIMARY KEY, user_id INTEGER, created INTEGER, last_seen INTEGER);`
+  * Dynamic non-destructive check added: `if (!in_array('last_seen', $tcols)) $db->exec('ALTER TABLE tokens ADD COLUMN last_seen INTEGER');`
+  * If `last_seen` is null/0 on legacy tokens, code falls back safely to `created`.
+
+ISSUE 2: LOGOUT & SEND BEACON BEHAVIOR
+- Normal Logout Awaits Server Response:
+  * Client-side `logout(f)` now synchronously `await`s `fetch(apiUrl('logout'))` with Bearer auth header and POST payload.
+  * Local session state (`tok = null`, `localStorage.removeItem('kh_t')`, in-memory store) is cleared ONLY AFTER
+    the server response is received (or caught on network error).
+- Server Multi-Format POST Token Reading:
+  * `api.php` extracts tokens from:
+    1. `Authorization: Bearer <token>` header (primary standard)
+    2. `json_decode(file_get_contents('php://input'))['token']` (JSON fetch and sendBeacon Blob)
+    3. `$_POST['token']` (FormData and URL-encoded POST)
+  * All tokens are strictly regex-validated (`^[A-Za-z0-9_-]{32,128}$`).
+- Best-Effort Fallback Clarification:
+  * If network drops or aborts during logout, `navigator.sendBeacon(apiUrl('logout'), blob)` is triggered as best-effort.
+  * Explicitly acknowledged: `sendBeacon` cannot guarantee execution during abrupt OS termination (process kill,
+    task swipe-away, kernel OOM kill, sudden power loss). The 90-day inactivity expiration ensures abandoned tokens
+    safely expire server-side.
+
+
+3. FILES CHANGED
+--------------------------------------------------------------------------------
+1. /khoroch/api.php (and synced /public/khoroch/api.php):
+   - Added `last_seen` column migration and column specification in `newToken()`.
+   - Enforced immutable `created` timestamp (removed any overwrite of `created`).
+   - Implemented 90-day inactivity check based on `last_seen` (fallback to `created`).
+   - Added throttled `last_seen` update (> 24h).
+   - Added `$_POST['token']` parsing alongside JSON body and Bearer header.
+   - Preserved `?a=logout` server-side token deletion and event logging.
+
+2. /khoroch/index.html (and synced /public/khoroch/index.html):
+   - Modified `logout(f)` to `await` the server logout response before clearing localStorage and memory.
+   - Added best-effort `navigator.sendBeacon` fallback inside network catch block.
+
+
+4. TESTS PERFORMED & ACTUAL RESULTS
+--------------------------------------------------------------------------------
+Automated test suite executed against SQLite 3 engine verifying the exact token validation,
+renewal, expiration, and logout mechanisms:
+
+[TEST 1] Token Renewal & Immutability:
+   - Scenario: Token active, request made after 2 days of inactivity.
+   - Result: PASS. `last_seen` updated to current time; `created` remained strictly unchanged (immutable).
+
+[TEST 2] Inactivity Expiration (91 Days Inactive):
+   - Scenario: Token inactive for 91 days (`now - last_seen = 91 * 86400`).
+   - Result: PASS. Server returned HTTP 401 Unauthorized ("নিষ্ক্রিয়তার কারণে লগইনের মেয়াদ শেষ হয়ে গেছে").
+     Token record was automatically deleted from SQLite `tokens` table.
+
+[TEST 3] Active Token Longevity Under Inactivity Policy:
+   - Scenario: Token created 100 days ago, but active yesterday (`now - last_seen = 0.5 days`).
+   - Result: PASS. Token accepted (HTTP 200), user authenticated, `created` remained untouched.
+
+[TEST 4] Normal Logout via Bearer Header:
+   - Scenario: User logs out; client awaits server response.
+   - Result: PASS. Token removed from DB, audit log recorded `logout` for `user#1`, response returned `{"ok":true}`.
+
+[TEST 5] sendBeacon Fallback Logout (JSON POST Body):
+   - Scenario: Client sends logout payload via JSON blob.
+   - Result: PASS. Server extracted token from JSON input, deleted token from DB, returned `{"ok":true}`.
+
+[TEST 6] sendBeacon Fallback Logout (Form URL-Encoded POST Body):
+   - Scenario: Client sends logout payload via `$_POST['token']`.
+   - Result: PASS. Server extracted token from POST array, deleted token from DB, returned `{"ok":true}`.
+
+[TEST 7] Reuse of Logged-out Token:
+   - Scenario: Subsequent API request made using a previously logged-out token.
+   - Result: PASS. Server returned HTTP 401 Unauthorized. Revocation is permanent.
+
+
+5. REMAINING RISKS & LIMITATIONS
+--------------------------------------------------------------------------------
+1. Best-Effort Nature of sendBeacon on Mobile:
+   - On mobile devices (Android/iOS), if the user swipes away the app from the task switcher or the OS kills
+     the process for memory, JavaScript cannot run and no network packet is dispatched.
+   - This is normal browser/OS behavior. Security is maintained because:
+     * Unused sessions automatically expire server-side after 90 days of inactivity.
+     * Normal in-app logout synchronously revokes the token server-side.
+2. Production HTTPS:
+   - Bearer headers and POST credentials require HTTPS/TLS on production hosting (cPanel AutoSSL / Let's Encrypt).
+
+
+6. RECOMMENDED NEXT STEP
+--------------------------------------------------------------------------------
+Phase 5 is verified and complete. Awaiting user approval to proceed to:
+-> PHASE 6: MULTI-USER DATA ISOLATION VERIFICATION
+   (Audit and verify that every SQL query in api.php strictly filters by user_id and that no endpoint leaks data between users).
+================================================================================

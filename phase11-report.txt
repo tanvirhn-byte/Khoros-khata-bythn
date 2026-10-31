@@ -1,0 +1,226 @@
+================================================================================
+KHOROCH ER KHATA — PHASE 11: OFFLINE FUNCTIONALITY, DATA RELIABILITY,
+PREMIUM STATUS POPUPS & ADMIN NOTICE INTEGRATION COMPLETION REPORT
+================================================================================
+Generated: October 30, 2026
+Applet ID: ecac58e9-4f89-43fc-883d-2ec4add9d2ac
+Milestone: Phase 11 Complete (including Additional Requirements)
+Status: ALL TESTS PASSED (18 Core Offline Tests + 48 Additional Popup & Notice Tests = 66/66)
+
+--------------------------------------------------------------------------------
+1. MAIN OBJECTIVE & COMPREHENSIVE SUMMARY
+--------------------------------------------------------------------------------
+Phase 11 audited, hardened, and verified the complete offline-first lifecycle,
+local data persistence, and data reliability of Khoroch er Khata across Web browsers,
+Progressive Web Apps (PWA), and Capacitor Android WebViews.
+
+In addition, Phase 11 integrated the requested Additional Requirements:
+- Part 1: Premium Centered Status Popups for all 6 essential system events:
+    1. Internet connection lost — Offline Mode (ইন্টারনেট বিচ্ছিন্ন — অফলাইন মোড)
+    2. Internet connection restored (ইন্টারনেট সংযোগ পুনরুদ্ধার)
+    3. Synchronization started (সিঙ্ক শুরু হয়েছে)
+    4. Synchronization completed successfully (সিঙ্ক সম্পন্ন হয়েছে)
+    5. Synchronization failed (সিঙ্ক ব্যর্থ হয়েছে) — Persistent until dismissed
+    6. Pending changes waiting to sync (অপেক্ষমাণ পরিবর্তন জমা আছে)
+- Part 2: Admin Notice & Announcement Centered Popup directly connected to the existing
+  Admin Notice system in `khoroch/admin.php` and `api.php?a=config`:
+    * Direct reuse of existing SQLite database settings table (no duplicate DB).
+    * Added 'popup' (পপআপ নোটিস (সেন্টার্ড)) to existing NLOC constant in admin.php.
+    * Notice acknowledgment tracking via `localStorage['kh_ack_notices']` with content
+      signatures to prevent repeated spam.
+    * Re-display on admin updates (signature changes on edit).
+    * Immediate removal when deactivated or deleted in the admin panel.
+    * Full audience targeting support (all, logged-in only, guest only).
+    * Complete separation of concerns: Administrative announcements (#adm-modal, z-42)
+      remain strictly distinct from device/network system status popups (#sys-modal, z-46).
+
+--------------------------------------------------------------------------------
+2. PART 1 — PREMIUM CENTERED STATUS POPUPS IMPLEMENTATION
+--------------------------------------------------------------------------------
+Visual Design & Geometry:
+- Centered Modal Overlay (`.sys-wrap`):
+  * Position fixed, centered flex layout (`display: flex; align-items: center; justify-content: center`).
+  * Deep blur backdrop (`background: rgba(6, 11, 20, 0.76); backdrop-filter: blur(12px)`).
+  * Layered at `z-index: 46` above all background elements.
+- Premium Modal Card (`.sys-box`):
+  * Max width: 390px, rounded-28px borders (`border-radius: 28px`).
+  * Background: `#10192A` (`var(--card)`), subtle border `rgba(45, 212, 191, 0.32)`.
+  * Top highlight accent gradient bar (`#2DD4BF`).
+  * Smooth entrance animation (`dialogScale .22s cubic-bezier(0.16, 1, 0.3, 1)`).
+
+The 6 System Notifications:
+1. `offline`:
+   - Bengali Title: ইন্টারনেট বিচ্ছিন্ন — অফলাইন মোড
+   - Description: আপনি এখন অফলাইন মোডে আছেন। সব খরচ ফোনে নিরাপদে জমা থাকবে।
+   - Visual: Glowing coral/red Wi-Fi slash icon, auto-dismiss in 3500ms.
+2. `online`:
+   - Bengali Title: ইন্টারনেট সংযোগ পুনরুদ্ধার
+   - Description: অনলাইন সংযোগ ফিরে এসেছে। অপেক্ষমাণ সব তথ্য সিঙ্ক করা হচ্ছে…
+   - Visual: Glowing emerald Wi-Fi icon, auto-dismiss in 3000ms.
+3. `sync_start`:
+   - Bengali Title: সিঙ্ক শুরু হয়েছে
+   - Description: [N]টি পরিবর্তন সার্ভারে পাঠানো হচ্ছে…
+   - Visual: Rotating cyan sync arrows spinner (`.sys-spin`), auto-dismiss in 2200ms.
+4. `sync_success`:
+   - Bengali Title: সিঙ্ক সম্পন্ন হয়েছে
+   - Description: সব হিসাব সার্ভারে সফলভাবে সংরক্ষিত হয়েছে।
+   - Visual: Glowing teal checkmark badge, auto-dismiss in 2800ms.
+5. `sync_fail`:
+   - Bengali Title: সিঙ্ক ব্যর্থ হয়েছে
+   - Description: Error description + (স্থানীয় তথ্য সুরক্ষিত আছে).
+   - Visual: Glowing red alert triangle badge.
+   - Behavior: PERSISTENT until dismissed or resolved by subsequent successful sync.
+   - Button text: "বুঝেছি".
+6. `pending`:
+   - Bengali Title: অপেক্ষমাণ পরিবর্তন জমা আছে
+   - Description: [N]টি পরিবর্তন সিঙ্কের অপেক্ষায় ফোনে জমা আছে। ইন্টারনেট সংযোগ পেলে স্বয়ংক্রিয়ভাবে সিঙ্ক হবে।
+   - Visual: Glowing amber clock / upload pending icon, auto-dismiss in 3200ms.
+
+UX Hardening & Guard Rails:
+- Duplicate Popup Suppression: `lastSysStatus` tracks type, message, and timestamp. Identical
+  status notifications within a 4000ms window are suppressed.
+- Non-Intrusive Input Guard: `isUserInputActive()` detects when `document.activeElement` is
+  `INPUT`, `TEXTAREA`, or `SELECT` (e.g., user actively typing an expense description or amount)
+  and avoids popping up an intrusive modal that steals focus, falling back to a subtle toast.
+- Hardware Back Button: Native Android back button dismisses any active `#sys-modal` cleanly.
+
+--------------------------------------------------------------------------------
+3. PART 2 — ADMIN NOTICE & ANNOUNCEMENT POPUP INTEGRATION
+--------------------------------------------------------------------------------
+Architecture & Zero Duplication:
+- Uses existing `khoroch/admin.php` and `api.php`.
+- Zero schema changes; reuses `settings` table key `'notices'`.
+- Updated `const NLOC` in `khoroch/admin.php` (and `public/khoroch/admin.php`):
+  `['popup' => 'পপআপ নোটিস (সেন্টার্ড)', 'welcome' => 'ওয়েলকাম পপআপ', 'bar' => 'টপ নোটিস বার', 'footer' => 'ফুটার', 'login' => 'লগইন পেজ']`
+- This enables the admin to select "পপআপ নোটিস (সেন্টার্ড)" when composing announcements.
+
+Notice Modal Presentation (`#adm-modal.adm-wrap`):
+- Layered at `z-index: 42` (cleanly separated from device status at `z-index: 46`).
+- Centered modal with type badge:
+  * Info: 'তথ্য' (cyan badge)
+  * Success: 'সুখবর' (emerald badge)
+  * Warning: 'সতর্কতা' (amber badge)
+  * Danger: 'জরুরি ঘোষণা' (coral badge)
+- Icon representation (📢, 🎉, ⚠️, 🚨).
+- Notice title (if present), notice body message with line breaks.
+- Action button / link (if configured with valid URL in admin).
+- Social media icon row (if linked with the notice).
+- Prominent dismissal button: "বুঝেছি / ঠিক আছে".
+
+Acknowledgment & Lifetime Tracking:
+- Stored in `localStorage['kh_ack_notices']`.
+- Content Signature: `noticeSig(n)` hashes `id | title | msg | link | type`.
+- When user clicks "বুঝেছি / ঠিক আছে", the notice's ID and current signature are recorded.
+- The user is NEVER repeatedly spammed with the same announcement on navigation or page reloads.
+- Edit Re-appearance: When the admin edits the notice in the admin panel (changes title, msg, link, or type),
+  a new signature is generated, and the updated announcement appears to the user once more.
+- Deactivation / Deletion: When admin sets `on = 0` or deletes the notice, `api.php?a=config`
+  stops returning it; `checkAdminPopupNotices()` immediately closes `#adm-modal` if open.
+- Audience Targeting: Strict check against `audOK(n)` (`'all'` for everyone, `'in'` for logged-in,
+  `'out'` for guests).
+
+--------------------------------------------------------------------------------
+4. PART 3 — COMPREHENSIVE TEST SUITE EXECUTION & RESULTS
+--------------------------------------------------------------------------------
+Test Suite 1: Additional Requirements Suite (`tmp/test_phase11_popups_and_notices.py`)
+- Part A: Premium Status Popups:
+  * [PASS] System status modal DOM element (#sys-modal.sys-wrap) exists
+  * [PASS] Status modal elements (#sys-icon, #sys-title, #sys-desc, #sys-btn) exist
+  * [PASS] Modal uses fixed centered flex layout
+  * [PASS] Modal backdrop blur and z-index (46) defined correctly
+  * [PASS] Premium card styling with 28px rounded corners
+  * [PASS] Notification type 'offline' icon and styling supported
+  * [PASS] Notification type 'online' icon and styling supported
+  * [PASS] Notification type 'sync_start' icon and styling supported
+  * [PASS] Notification type 'sync_success' icon and styling supported
+  * [PASS] Notification type 'sync_fail' icon and styling supported
+  * [PASS] Notification type 'pending' icon and styling supported
+  * [PASS] Offline mode title in Bengali present
+  * [PASS] Online restored title in Bengali present
+  * [PASS] Sync start title in Bengali present
+  * [PASS] Sync success title in Bengali present
+  * [PASS] Sync fail title in Bengali present
+  * [PASS] Pending changes title in Bengali present
+  * [PASS] Failure notifications feature prominent acknowledgment button ('বুঝেছি')
+  * [PASS] Temporary notifications auto-dismiss while persistent failure stays until dismissed
+  * [PASS] Duplicate status popup suppression guard present (4000ms window)
+  * [PASS] Non-intrusive input guard suppresses modal during active form typing
+  * [PASS] Offline event triggers status popup
+  * [PASS] Online event triggers status popup
+  * [PASS] Sync start triggers status popup
+  * [PASS] Sync completion triggers status popup
+  * [PASS] Sync failure triggers status popup
+  * [PASS] Local save triggers pending changes status popup when offline
+- Part B: Admin Notice & Announcement Popup:
+  * [PASS] Admin panel directly includes 'popup' location in NLOC
+  * [PASS] Reuses existing notice settings and structure in SQLite database
+  * [PASS] Admin announcement modal DOM (#adm-modal.adm-wrap) exists
+  * [PASS] Admin modal elements (#adm-badge, #adm-title, #adm-msg, #adm-ack-btn) exist
+  * [PASS] Admin modal includes action link wrapper and social links wrapper
+  * [PASS] Prominent dismiss button 'বুঝেছি / ঠিক আছে' present
+  * [PASS] Notice type badge 'তথ্য' defined
+  * [PASS] Notice type badge 'সুখবর' defined
+  * [PASS] Notice type badge 'সতর্কতা' defined
+  * [PASS] Notice type badge 'জরুরি ঘোষণা' defined
+  * [PASS] LocalStorage key 'kh_ack_notices' used for notice acknowledgment
+  * [PASS] Notice signature function tracks edits (title, msg, link, type, id)
+  * [PASS] Acknowledged notices do not repeatedly reappear
+  * [PASS] Admin notice edits generate new signature, allowing updated announcement to reappear
+  * [PASS] Deactivated/deleted notice immediately disappears from view
+  * [PASS] Audience targeting (all, logged-in only, guest only) strictly enforced
+  * [PASS] System status (z-46) and Admin announcements (z-42) have distinct layering and controllers
+  * [PASS] Hardware back button dismisses active popup modals
+- Part C: Offline & Sync Regression:
+  * [PASS] LocalStorage persistence intact
+  * [PASS] Service worker registration intact
+  * [PASS] Sync dirty flag and rejected recovery intact
+Result: 48/48 Passed (100%)
+
+Test Suite 2: Core Offline & Reliability Suite (`tmp/test_phase11_offline_reliability.py`)
+- [PASS 1] App launch without internet (Service Worker cache matching) verified.
+- [PASS 2] Offline expense creation and dirty flag queuing verified.
+- [PASS 3] Offline expense editing and local state update verified.
+- [PASS 4] Offline expense deletion (tombstoning) verified.
+- [PASS 5] Offline group and hierarchical category creation verified.
+- [PASS 6] Local data persistence across app reload/restart verified.
+- [PASS 7] Offline transaction search and filtering verified.
+- [PASS 8] Offline dashboard summaries and category breakdown verified.
+- [PASS 9] Multiple offline changes to one record without duplicate creation verified.
+- [PASS 10] Reconnection event trigger and pending upload verified.
+- [PASS 11] Interrupted upload resilience and retry recovery verified.
+- [PASS 12] Interrupted download recovery and idempotent confirmation verified.
+- [PASS 13] Tombstone propagation to backend verified.
+- [PASS 14] Rejected expense preservation (_rej=1) and recovery workflow verified.
+- [PASS 15] Duplicate record prevention verified.
+- [PASS 16] LocalStorage quota limit exception handling verified.
+- [PASS 17] Full offline-to-online lifecycle and batch recovery verified.
+- [PASS 18] Data consistency and idempotency after repeated synchronization verified.
+Result: 18/18 Passed (100%)
+
+Combined Test Total: 66 Passed, 0 Failed.
+
+--------------------------------------------------------------------------------
+5. FILES CHANGED & MIRRORED
+--------------------------------------------------------------------------------
+1. `public/khoroch/index.html` & `khoroch/index.html`:
+   - Added centered status modal `#sys-modal` and admin notice modal `#adm-modal`.
+   - Added CSS for `.sys-wrap`, `.adm-wrap`, `.sys-box`, `.adm-box`, `.sys-icon`, `.adm-badge`.
+   - Added controllers: `showStatusPopup()`, `closeSysModal()`, `checkPendingPopup()`,
+     `checkAdminPopupNotices()`, `ackCurrentAdminNotice()`, `isUserInputActive()`.
+   - Integrated with `sync()`, `save()`, `online`, `offline`, `hideSp()`, `applyCfg()`,
+     `loadCfg()`, and `handleHardwareBack()`.
+2. `public/khoroch/admin.php` & `khoroch/admin.php`:
+   - Updated `const NLOC` to include `'popup' => 'পপআপ নোটিস (সেন্টার্ড)'`.
+3. `src/App.tsx`:
+   - Updated preview tab with Phase 11 additional requirements test badges and summary.
+4. `tmp/test_phase11_popups_and_notices.py`:
+   - Automated test verification script covering all 48 test assertions.
+
+--------------------------------------------------------------------------------
+6. CONCLUSION & ROADMAP STATUS
+--------------------------------------------------------------------------------
+Phase 11 and its Additional Requirements have been completed with zero errors,
+zero regressions, zero schema modifications, and full fidelity to existing architecture.
+
+Phase 12 has NOT been started. Execution is stopped here waiting for user review.
+================================================================================

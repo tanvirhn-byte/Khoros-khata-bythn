@@ -1,0 +1,70 @@
+# Dependencies
+node_modules/
+!package-lock.json
+
+# Web & Vite build outputs
+build/
+dist/
+coverage/
+
+# Android Gradle build outputs & local machine config
+android/.gradle/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/build/
+android/local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# IDE & OS temporary files
+.DS_Store
+Thumbs.db
+*.iml
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local secrets & environment variables
+.env*
+!.env.example
+
+# Keystores & signing credentials (never commit private signing keys)
+*.jks
+*.keystore
+keystore.properties
+
+# SQLite databases, journals, WAL/SHM files & runtime data directories
+data/*
+public/khoroch/data/*
+khoroch/data/*
+!khoroch/data/.htaccess
+!khoroch/data/index.php
+!public/khoroch/data/.htaccess
+!public/khoroch/data/index.php
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-journal
+
+# Logs & backups
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.bak
+*.backup
+*.tmp
+*.temp
+
+# Explicitly include required Gradle wrapper & Capacitor Android plugin files
+!android/gradle/wrapper/gradle-wrapper.jar
+!android/gradle/wrapper/gradle-wrapper.properties
+!android/gradlew
+!android/gradlew.bat
+!android/capacitor-cordova-android-plugins/**

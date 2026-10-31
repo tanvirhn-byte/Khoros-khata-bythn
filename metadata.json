@@ -1,0 +1,6 @@
+{
+  "name": "Khoroch er Khata",
+  "description": "Personal finance and expense tracking application with offline synchronization, PWA, and Android support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

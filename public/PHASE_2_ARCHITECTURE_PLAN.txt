@@ -1,0 +1,350 @@
+================================================================================
+KHOROCH ER KHATA (খরচের খাতা)
+PHASE 2: ARCHITECTURE AND DEVELOPMENT PLANNING
+Date: 2026-10-30
+Scope: Stabilization, Security, PWA, Multi-Device Sync, and Capacitor APK
+Target Constraints: No new features (Income, Goals, Password Reset postponed)
+================================================================================
+
+1. EXECUTIVE ARCHITECTURE OVERVIEW
+--------------------------------------------------------------------------------
+The target architecture is a Unified Single-Codebase, Dual-Runtime system:
+
++-------------------------------------------------------------------------+
+|                              CLIENT TIER                                |
+|                                                                         |
+|  [ Web Browser (cPanel / Custom Domain) ]    [ Android App (Capacitor) ]|
+|  - Standard Desktop & Mobile Browsers       - Native Android APK Shell |
+|  - Installable PWA (Chrome on Android)      - Embedded Android WebView |
+|  - Origin: https://khoroch.yourdomain.com   - Origin: http://localhost |
+|                                                                         |
+|                          SHARED WEB ASSET                               |
+|                  index.html + sw.js + manifest.json                     |
+|         (Client-side UI, LocalStorage State, Sync Engine)               |
++-------------------------------------------------------------------------+
+                                    |
+            HTTPS Requests (JSON / REST-like Protocol)
+         - Web: Relative path 'api.php?a=...'
+         - Android APK: Configurable remote 'https://domain.com/api.php?a=...'
+                                    |
+                                    v
++-------------------------------------------------------------------------+
+|                              SERVER TIER                                |
+|                     Hosted on PHP Shared Hosting / cPanel               |
+|                                                                         |
+|                            [ api.php ]                                  |
+|   - CORS Handling & OPTIONS preflight (for Android Capacitor)           |
+|   - Bearer / JSON Token Authentication with Expiration Validation       |
+|   - Multi-User Isolated Operations (WHERE user_id = ?)                  |
+|   - Two-Way Incremental Sync Engine (Last-Write-Wins + Clock Skew)      |
+|   - Security Hardening (display_errors=0, rate limiting, log rotation)  |
+|                                                                         |
+|                           [ admin.php ]                                 |
+|   - Separate Isolated Admin Session & CSRF Protection                   |
+|   - User Management, Announcements, Activity & Error Log Viewer         |
++-------------------------------------------------------------------------+
+                                    |
+                                    v
++-------------------------------------------------------------------------+
+|                             DATABASE TIER                               |
+|                     Embedded SQLite 3 (khoroch.sqlite)                  |
+|                                                                         |
+|   - Location: data/khoroch.sqlite                                       |
+|   - Engine: SQLite 3 with Write-Ahead Logging (WAL mode)                 |
+|   - Concurrency: PRAGMA busy_timeout=8000 + 4-tier application retry    |
+|   - Security: Protected via data/.htaccess + PHP direct-access blockage |
+|   - Backup: 1-Click SQLite file copy via cPanel File Manager            |
++-------------------------------------------------------------------------+
+
+
+================================================================================
+2. TIER RESPONSIBILITIES
+================================================================================
+
+A. Frontend (index.html):
+- Renders the responsive user interface (Home, Expenses, Reports, Categories, Settings).
+- Maintains local application state (S) in browser localStorage (kh_s).
+- Optimistic updates: all actions (add, edit, delete) take effect locally in 0ms.
+- Tracks local changes using a dirty flag (_d = 1) and skew-adjusted timestamps.
+- Manages local PIN lock and inactivity timer.
+- Handles Service Worker registration for PWA installability.
+- Detects runtime environment (Browser vs Capacitor) to resolve API Base URL.
+
+B. Backend API (api.php):
+- Stateless request processor for JSON operations.
+- Enforces CORS policies for cross-origin Android WebView requests.
+- Authenticates API tokens and validates token expiration.
+- Enforces multi-tenant data isolation by binding all queries to authenticated user_id.
+- Executes incremental two-way data sync inside atomic transactions.
+- Provides system configuration, broadcast notices, and polling endpoints.
+
+C. Admin Dashboard (admin.php):
+- Completely isolated from normal user API endpoints.
+- Authenticates using PHP session cookies with CSRF token verification.
+- Provides administrative management: user approvals, account suspension, notices,
+  system error inspection, visitor metrics, and database downloads.
+
+D. Database (data/khoroch.sqlite):
+- Embedded relational persistence via PDO SQLite.
+- Stores user accounts, active tokens, sync revisions (rev), expense records,
+  categories, category groups, preferences/budgets, and audit logs.
+- Operates in WAL (Write-Ahead Logging) mode for concurrent reads and writes.
+
+E. Hosting & Web Server (cPanel / Apache):
+- Enforces HTTPS on custom domains.
+- Evaluates .htaccess to prevent directory indexing and block direct access to /data.
+- Serves static assets (HTML, JS, PNG icons, Manifest).
+
+
+================================================================================
+3. API COMMUNICATION & BASE URL STRATEGY
+================================================================================
+
+A. Problem Statement:
+- On Web (cPanel), index.html and api.php live in the same directory.
+  Calling 'api.php?a=...' works out of the box.
+- In Capacitor Android, index.html is loaded locally from 'http://localhost/'
+  or 'capacitor://localhost/'. Calling 'api.php?a=...' will resolve to
+  'http://localhost/api.php', which does not exist inside the APK.
+
+B. Base URL Resolution Strategy:
+We will introduce a clean, zero-dependency configuration helper in index.html:
+
+  const API_CONFIG = {
+    // Leave empty for auto-detect (uses current domain on web)
+    // For Android APK, this points to your deployed production domain:
+    REMOTE_URL: 'https://yourdomain.com/api.php',
+    
+    getBaseUrl() {
+      // If running inside Capacitor Android or custom remote origin:
+      const isCapacitor = window.Capacitor !== undefined || 
+                          window.location.protocol === 'capacitor:' || 
+                          window.location.hostname === 'localhost';
+      if (isCapacitor && this.REMOTE_URL && !this.REMOTE_URL.includes('yourdomain.com')) {
+        return this.REMOTE_URL;
+      }
+      // Running on standard website / cPanel:
+      return 'api.php';
+    }
+  };
+
+C. Centralized API Dispatcher:
+Replace scattered fetch() calls with a single helper: apiUrl(action):
+  function apiUrl(action) {
+    const base = API_CONFIG.getBaseUrl();
+    const sep = base.includes('?') ? '&' : '?';
+    return `${base}${sep}a=${encodeURIComponent(action)}`;
+  }
+
+D. CORS & Preflight Implementation in api.php:
+Android WebView requests from Capacitor will send:
+  Origin: http://localhost  OR  capacitor://localhost
+api.php must handle preflight:
+  - Respond to OPTIONS requests with HTTP 204 No Content immediately.
+  - Set Access-Control-Allow-Origin: * (or dynamic origin reflecting Android schemes).
+  - Set Access-Control-Allow-Methods: POST, GET, OPTIONS.
+  - Set Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With.
+
+
+================================================================================
+4. DATABASE DEPLOYMENT & PROTECTION STRATEGY
+================================================================================
+
+A. Engine & Concurrency:
+- SQLite 3 via PHP PDO (pdo_sqlite).
+- WAL mode (PRAGMA journal_mode=WAL;) allows readers to proceed without blocking
+  writers, and writers do not block readers.
+- PRAGMA busy_timeout=8000; ensures queries wait up to 8 seconds during write locks.
+- Application-level exponential backoff retry loop (4 attempts) in api.php handles
+  heavy simultaneous write bursts.
+
+B. Multi-Layer Database Protection:
+1. Apache / cPanel Layer:
+   data/.htaccess contains:
+     <IfModule mod_authz_core.c>
+       Require all denied
+     </IfModule>
+     <IfModule !mod_authz_core.c>
+       Order allow,deny
+       Deny from all
+     </IfModule>
+2. PHP Directory Guard:
+   data/index.html (placeholder) prevents directory listing.
+3. Server-Level Protection Rule:
+   In api.php, block any request attempting to pass 'data/' directly.
+4. Backup Procedure (Mobile & cPanel Friendly):
+   - In cPanel File Manager: Right click data/khoroch.sqlite -> Copy or Download.
+   - In Admin Panel: 1-click database download button in admin.php.
+
+
+================================================================================
+5. AUTHENTICATION & MULTI-DEVICE SYNC ARCHITECTURE
+================================================================================
+
+A. Authentication Protocol:
+1. Registration (?a=register):
+   - Validates email and minimum 8-character password.
+   - Enforces IP rate limiting (max 5 accounts per hour per IP).
+   - Hashes password with standard Bcrypt/Argon2 (PASSWORD_DEFAULT).
+   - Generates 64-character cryptographically secure token (random_bytes(32)).
+   - Stores SHA-256 hash in tokens table.
+2. Login (?a=login):
+   - Validates email/password with password_verify().
+   - Enforces IP brute-force protection (max 5 failures per 15 min per IP).
+   - Checks account status (pending approval, blocked, active).
+   - Returns authentication token on success.
+3. Token Expiration (Essential Security Fix):
+   - Currently, tokens never expire.
+   - FIX: Enforce 90-day inactivity timeout on tokens:
+     WHERE token_hash = ? AND created > (time() - 90 * 86400)
+     Update token created timestamp on active sync to implement rolling session.
+4. Server-Side Logout (?a=logout) (Essential Security Fix):
+   - Add ?a=logout endpoint:
+     DELETE FROM tokens WHERE token_hash = ?
+   - Frontend logout() will call ?a=logout before clearing local storage.
+5. Token Transmission Security:
+   - Discontinue accepting tokens via $_GET['token'].
+   - Accept tokens ONLY in JSON POST body or Authorization: Bearer header.
+   - Eliminates token leakage in web server access logs and browser history.
+
+B. Two-Way Synchronization Architecture:
+- Client holds revision pointer: S.since (last synced revision).
+- Server holds user revision pointer: users.rev (incremented on each atomic write).
+- Clock Skew Compensation (SK):
+  On sync response, server returns current epoch milliseconds (now).
+  Client computes SK = serverNow - localNow and offsets timestamps to guarantee
+  causality even if the user's phone clock is incorrect.
+- Last-Write-Wins Conflict Resolution:
+  When pushing changes, server queries existing updated timestamp:
+  SELECT updated FROM table WHERE user_id=? AND id=?
+  Incoming write is accepted ONLY if incoming.updated > existing.updated.
+- Incremental Pull:
+  Server selects all records for user where rev > S.since, plus final state of
+  items pushed in the current batch.
+- Batch & Payload Caps:
+  Max 400 records per sync batch; max 2.5MB payload size. If more records remain,
+  server signals more: true and client continues immediately.
+
+
+================================================================================
+6. PWA & CAPACITOR ANDROID ARCHITECTURE
+================================================================================
+
+A. Progressive Web App (PWA):
+1. manifest.json:
+   - Generic name: "খরচের খাতা" (Remove hardcoded "Tanvir").
+   - Define id: "/khoroch-app/".
+   - Define orientation: "portrait-primary".
+   - Separate icons into distinct "any" and "maskable" entries to prevent
+     Android Chrome icon distortion.
+2. Service Worker (sw.js):
+   - Replace basic network-first handler with an App Shell Cache-First strategy:
+     * Precache on install: index.html, manifest.json, icon-192.png, icon-512.png.
+     * Runtime cache Google Fonts with Stale-While-Revalidate.
+     * Network-Only for all api.php requests (never cache API calls in SW).
+   - Results: App shell opens instantly (< 100ms) even with zero network connectivity.
+
+B. Capacitor Android APK Architecture:
+1. Project Wrapper:
+   Capacitor wraps the existing index.html, CSS, and JS inside an Android
+   WebView (Android Studio project managed via CLI / GitHub Actions).
+2. App ID & Name:
+   - App ID: com.khoroch.app
+   - App Name: খরচের খাতা
+3. Hardware Back Button Handling:
+   In index.html, attach Capacitor App listener:
+     if (window.Capacitor && window.Capacitor.Plugins.App) {
+       window.Capacitor.Plugins.App.addListener('backButton', () => {
+         // 1. If modal/sheet open -> close modal
+         // 2. If on non-home tab -> switch to Home tab
+         // 3. If on Home tab -> exit app
+       });
+     }
+4. Safe Area & Status Bar:
+   Use Capacitor StatusBar plugin with dark theme background (#0F1B2D)
+   matching the app header.
+
+
+================================================================================
+7. MINIMUM SECURITY REQUIREMENTS BEFORE PRODUCTION
+================================================================================
+
+1. CORS Headers in api.php:
+   Mandatory for Capacitor Android APK network requests.
+2. Removal of Query Parameter Tokens:
+   Remove $_GET['token'] in api.php to prevent token leakage in web server logs.
+3. Server-Side Token Invalidation:
+   Implement api.php?a=logout and invoke it on user sign-out.
+4. Token Expiration Enforcement:
+   Reject tokens older than 90 days in tokens table.
+5. Admin Default Password Lockout:
+   Enforce that admin.php cannot be accessed if ADMIN_PASS is default ('CHANGE_ME_NOW').
+6. Universal Deletion Code Configuration:
+   Ensure DELETE_CODE is stored in settings table and can be updated from admin UI.
+7. Error Logging Hardening:
+   Retain display_errors = 0 and automatic error.log truncation at 200KB.
+
+
+================================================================================
+8. FILE-BY-FILE IMPLEMENTATION ROADMAP
+================================================================================
+
+File: api.php
+- Add CORS response headers and handle OPTIONS preflight.
+- Add endpoint ?a=logout to delete token from tokens table.
+- Enforce token expiration (90 days) during token validation.
+- Remove $_GET['token'] parameter reading.
+- Preserve all existing sync, report, login, config, and admin mechanisms.
+
+File: index.html
+- Add centralized API_CONFIG and apiUrl(action) helper.
+- Update all 8 fetch() / fetchT() calls to use apiUrl().
+- Update logout() to call api.php?a=logout.
+- Add Android hardware back button handler (Capacitor App plugin check).
+- Fix minor ARIA accessibility tags on modal dialogs.
+- Keep 100% of existing CSS, theme colors, layout, and UX behavior identical.
+
+File: sw.js
+- Upgrade cache version to 'kh-v2'.
+- Precache core app shell assets (index.html, manifest.json, icons).
+- Cache Google Fonts.
+- Explicitly bypass Service Worker cache for all API requests.
+
+File: manifest.json
+- Clean up application name and short name.
+- Add orientation, id, and separate maskable icon entries.
+
+File: admin.php
+- Verify session cookie security settings (HttpOnly, SameSite=Strict, Secure).
+- Ensure existing user management, notices, and log inspection continue working seamlessly.
+
+File: capacitor.config.json (New for Phase 16)
+- Standard Capacitor configuration file linking web assets to native Android shell.
+
+
+================================================================================
+9. REFINED DEVELOPMENT PHASE BREAKDOWN
+================================================================================
+
+PHASE 2 — Architecture and Planning (CURRENT — Under Review)
+PHASE 3 — Code Quality & Bug Fixes (Centralize API URL in frontend, fix minor bugs)
+PHASE 4 — Database Hardening (Verify table indexes, foreign key safety, backup check)
+PHASE 5 — Authentication & Security (Logout endpoint, token expiration, remove GET token)
+PHASE 6 — Multi-user Data Isolation Verification (Cross-account isolation tests)
+PHASE 7 — Backend API & CORS (Add CORS & OPTIONS preflight for Capacitor in api.php)
+PHASE 8 — Frontend and API Integration (Wire frontend to hardened backend)
+PHASE 9 — Core Expense Tracker Verification (Test transactions, categories, budgets)
+PHASE 10 — Online Synchronization (Test multi-device sync, clock skew, batch limits)
+PHASE 11 — Offline Functionality & Storage (Test offline transaction queue & sync)
+PHASE 12 — PWA Completion (Upgrade sw.js, refine manifest.json, verify install)
+PHASE 13 — Admin Dashboard Verification (Verify notices, users, metrics, logs)
+PHASE 14 — Security & Performance Audit (Final audit of headers, XSS, rate limits)
+PHASE 15 — Production Hosting Guidelines (cPanel upload, SSL, database protection)
+PHASE 16 — Capacitor Android Integration (Initialize Capacitor, back button, config)
+PHASE 17 — Android APK Testing (Test APK build, WebView connectivity, offline mode)
+PHASE 18 — Cloud Build (GitHub Actions workflow for automated APK compilation)
+PHASE 19 — Final Release & Documentation (Release checklist, backup guidelines)
+
+================================================================================
+END OF ARCHITECTURE PLAN
+================================================================================

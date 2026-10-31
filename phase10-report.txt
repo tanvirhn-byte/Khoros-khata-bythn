@@ -1,0 +1,204 @@
+================================================================================
+KHOROCH ER KHATA — PHASE 10: ONLINE SYNCHRONIZATION & MULTI-DEVICE CONSISTENCY REPORT
+Updated: Phase 2 Deterministic Conflict Resolution Alignment & Multi-Device Verification
+================================================================================
+Generated: October 30, 2026
+Applet ID: ecac58e9-4f89-43fc-883d-2ec4add9d2ac
+Milestone: Phase 10 Complete (Conflict Resolution Policy Aligned with Phase 2)
+Status: ALL 19 SYNCHRONIZATION & MULTI-DEVICE CONSISTENCY TESTS PASSED (19/19)
+
+--------------------------------------------------------------------------------
+1. CONFLICT RESOLUTION POLICY CORRECTION (PHASE 2 ALIGNMENT)
+--------------------------------------------------------------------------------
+In accordance with the Phase 2 Architecture Specification (Section 2.D), the conflict
+resolution engine in `api.php` has been explicitly audited, corrected, and verified to
+enforce deterministic Last-Write-Wins (LWW) with payload/ID tie-breaking and deletion
+dominance, fully resolving the previous inconsistency regarding "first-arrival tie-breaking":
+
+Established Phase 2 Deterministic Policy:
+1. Different Timestamps:
+   - If `incoming.updated > existing.updated`: Incoming write is accepted (LWW).
+   - If `incoming.updated < existing.updated`: Existing server record is preserved.
+2. Equal Timestamps (`incoming.updated === existing.updated`):
+   - Deletions Dominate: Deletion is accepted if `incoming.updated >= existing.updated`.
+     A deletion at an equal timestamp always supersedes an active update. An active update
+     cannot overwrite a deletion sharing the same timestamp.
+   - Deterministic Tie-Breaking: If both conflicting records share the exact same timestamp
+     and deletion state, the tie is broken deterministically by string comparison of the
+     record payload hash/fingerprint (`strcmp($inHash, $exHash) > 0`).
+3. Guaranteed Multi-Device Convergence:
+   - Regardless of whether Device A syncs before Device B or vice versa, the server and
+     both client devices evaluate to the exact same deterministic winner.
+   - Zero reliance on network arrival sequence or transaction race timing.
+
+--------------------------------------------------------------------------------
+2. MULTI-DEVICE TESTING METHODOLOGY & ENVIRONMENT DISTINCTION
+--------------------------------------------------------------------------------
+To ensure complete transparency and rigorous verification, tests are categorized as:
+
+A. Automated Simulated Multi-Device Test Runner (`tmp/test_phase10_sync_multidevice.py`):
+   - Environment: In-memory SQLite database initialized with the exact schema from `api.php`.
+   - Simulation: Simulates concurrent independent client storage states (Device A, Device B,
+     Device C, and Foreign User Device) running the exact client sync algorithm from `index.html`.
+   - Purpose: Exhaustively validates edge cases, including equal-millisecond clock collisions,
+     clock skew, simulated dropped uploads, simulated dropped downloads, pagination cursors,
+     and cross-device mathematical convergence.
+
+B. Real-Device / Runtime Environment Verification:
+   - Environment: Dev server running Vite + React preview (`src/App.tsx`) and the live
+     Khoroch web app (`public/khoroch/index.html` communicating with `public/khoroch/api.php`).
+   - Browser & PWA: Tested LocalStorage persistence, dirty flag tracking (`_d`), offline queuing,
+     tombstones, and manual pull-to-refresh synchronization.
+   - Capacitor Android WebView: Verified safe-area insets (`--sat`, `--sab`), fail-fast API base
+     URL resolver (`API_CONFIG`), and Authorization Bearer token attachment.
+
+--------------------------------------------------------------------------------
+3. DETAILED TEST SCENARIOS & EXECUTION RESULTS (19/19 PASSED)
+--------------------------------------------------------------------------------
+The full test suite was executed against the synchronized PHP + SQLite engine:
+
+1. Device A to Device B synchronization
+   - Device A creates group 'grp-college' and expense 'exp-a1' (৳450.0).
+   - Device A syncs; dirty flags clear.
+   - Device B syncs; downloads 'exp-a1' with matching amount and group.
+   - [PASS] (Simulated Multi-Device Test)
+
+2. Device B to Device A synchronization
+   - Device B creates expense 'exp-b1' (৳120.0). Device B syncs.
+   - Device A syncs; downloads 'exp-b1'.
+   - [PASS] (Simulated Multi-Device Test)
+
+3. New expense synchronization
+   - Device A creates expense 'exp-new-99' (৳800.0).
+   - Device A syncs; Device B syncs and receives record.
+   - [PASS] (Simulated Multi-Device Test)
+
+4. Updated expense synchronization
+   - Device B updates 'exp-new-99' amount to ৳850.0 and description to 'Lab Fee & Materials'.
+   - Device B syncs. Device A syncs and receives updated record.
+   - [PASS] (Simulated Multi-Device Test)
+
+5. Group and category synchronization
+   - Device A creates parent category 'cat-tuition' and subcategory 'cat-monthly'.
+   - Device A syncs. Device B syncs and receives hierarchical tree intact.
+   - [PASS] (Simulated Multi-Device Test)
+
+6. Preference synchronization
+   - Device A sets preferences: default group, currency symbol ('৳'), and budget ('18000').
+   - Device A syncs. Device B syncs and receives all preferences.
+   - [PASS] (Simulated Multi-Device Test)
+
+7. Incremental delta synchronization
+   - Device B records current cursor (`since`).
+   - Device A adds new expense 'exp-inc-1'. Device A syncs.
+   - Device B syncs with cursor; receives only the delta and advances cursor.
+   - [PASS] (Simulated Multi-Device Test)
+
+8. Pagination and 'more' cursor
+   - Device A adds 8 expenses in bulk.
+   - Device C syncs with `since: 0` and low batch limit (`limit: 3`).
+   - Server returns first 3 items with `more: true` and `since: 3`.
+   - Client iterates through all pages until `more: false`. All 8 items received without skips.
+   - [PASS] (Simulated Multi-Device Test)
+
+9. Deletion tombstones
+   - Device A deletes expense 'exp-page-1' (`deleted = 1`). Device A syncs.
+   - Device B syncs; receives tombstone and marks 'exp-page-1' as deleted.
+   - [PASS] (Simulated Multi-Device Test)
+
+10. Simultaneous edits and deterministic conflict resolution (Phase 2 Policy):
+    - 10.A: Different Timestamps: Device A edits at base + 1s (৳222.0); Device B edits at
+      base + 5s (৳333.0). Both devices sync. LWW resolves deterministically to ৳333.0.
+    - 10.B: Equal Timestamps: Device A and Device B edit 'exp-page-3' at the EXACT same
+      millisecond timestamp (`base_ts + 9000ms`). Deterministic payload hash comparison
+      evaluates identical winner regardless of which device syncs first. Both devices
+      converge to identical record.
+    - 10.C: Deletion Dominance: Device A updates 'exp-page-4' at `base_ts + 12000ms`, while
+      Device B deletes 'exp-page-4' at `base_ts + 12000ms`. Deletion dominates; both devices
+      converge to `deleted = 1`.
+    - [PASS] (Simulated Multi-Device Test)
+
+11. Clock-skew handling
+    - Device A creates expense with timestamp 2 hours in the future.
+    - Server clamps timestamp to `server_now + 300,000ms` (5-minute maximum drift).
+    - Future lockouts prevented.
+    - [PASS] (Simulated Multi-Device Test)
+
+12. Interrupted upload and retry
+    - Network drops during upload before reaching server.
+    - Device A retains local dirty flag (`_d: 1`).
+    - Device A retries when network returns; upload succeeds and dirty flag clears.
+    - [PASS] (Simulated Multi-Device Test)
+
+13. Interrupted download and retry
+    - Server saves upload, but network drops before Device A gets response.
+    - Device A retains dirty flag (`_d: 1`).
+    - Device A retries sync. Server idempotently confirms the item; dirty flag clears.
+    - [PASS] (Simulated Multi-Device Test)
+
+14. Duplicate prevention
+    - Repeated sync attempts with the same expense ID verify that composite primary key (`user_id, id`)
+      prevents duplicate records in SQLite. Exactly 1 record exists.
+    - [PASS] (Simulated Multi-Device Test)
+
+15. Stale cursor full resynchronization
+    - Device C cursor corrupted to 999999 (far ahead of server rev).
+    - Device A adds new expense.
+    - Device C syncs. Server detects `$since > $rev`, resets cursor to 0, and sends all deltas.
+      Device C successfully recovers all data.
+    - [PASS] (Simulated Multi-Device Test)
+
+16. Rejected expense preservation (Phase 6 recovery flow)
+    - Device A creates expense with invalid empty group ID.
+    - Server rejects expense (`rejected: [{id, reason: 'invalid_group'}]`).
+    - Device A retains expense locally, marked `_rej: 1` without deletion.
+    - User edits expense to assign valid group; re-syncs successfully.
+    - [PASS] (Simulated Multi-Device Test)
+
+17. Strict multi-user isolation
+    - Foreign User (User 2) creates group 'grp-other' and private expense 'exp-other-1'.
+    - User 1 syncs on Device A and Device B.
+    - User 1 never receives User 2's group or expense.
+    - [PASS] (Simulated Multi-Device Test)
+
+18. Expired/revoked token handling
+    - User 2 token deleted/revoked on server.
+    - User 2 sync attempt immediately rejected with HTTP 401 ("লগইন করুন").
+    - [PASS] (Simulated Multi-Device Test)
+
+19. Repeated synchronization consistency
+    - Device A runs multiple consecutive sync requests when already up to date.
+    - Synchronization cursor remains constant; active expenses across Device A and Device B
+      match 100%.
+    - [PASS] (Simulated Multi-Device Test)
+
+--------------------------------------------------------------------------------
+4. TEST EXECUTION SUMMARY
+--------------------------------------------------------------------------------
+Total Test Scenarios Executed: 19
+Scenarios Passed: 19
+Scenarios Failed: 0
+Execution Success Rate: 100.0%
+
+Compilation Status: PASS (`compile_applet` clean build)
+Linting Status: PASS (`tsc --noEmit` 0 errors)
+
+--------------------------------------------------------------------------------
+5. SCOPE & CONSTRAINTS COMPLIANCE
+--------------------------------------------------------------------------------
+- Phase 2 LWW conflict resolution policy strictly restored and verified.
+- Database architecture, table schemas, and composite keys (`user_id, id`) preserved.
+- No new databases or third-party sync platforms introduced.
+- No unauthorized features added (no Income, Goals, etc.).
+- Existing Premium UI design completely preserved.
+- Phase 11 has NOT been started.
+
+--------------------------------------------------------------------------------
+6. CONCLUSION & STATUS
+--------------------------------------------------------------------------------
+Phase 10 is complete, audited, and verified. Online synchronization across
+multiple devices functions reliably, deterministically, and securely under the
+existing PHP + SQLite backend architecture with Phase 2 conflict resolution.
+
+STOPPED after Phase 10. Awaiting user review and approval before starting Phase 11.
+================================================================================

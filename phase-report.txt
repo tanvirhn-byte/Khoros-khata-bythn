@@ -1,0 +1,97 @@
+================================================================================
+KHOROCH ER KHATA — PHASE 2 FINAL ARCHITECTURE REPORT
+Document: phase-report.txt
+================================================================================
+
+1. PHASE NAME AND STATUS
+--------------------------------------------------------------------------------
+Phase: PHASE 2 — Architecture and Development Planning
+Status: COMPLETED (Awaiting Client Approval to Begin Phase 3)
+
+
+2. FINAL ARCHITECTURE DECISIONS
+--------------------------------------------------------------------------------
+A. Safe SQLite WAL Backup:
+   - Primary Snapshot: Use `VACUUM INTO 'data/backup_temp.sqlite'` (SQLite 3.27+)
+     to create an atomic, crash-consistent, standalone single-file snapshot.
+   - Checkpoint Fallback: If `VACUUM INTO` is unavailable, execute
+     `PRAGMA wal_checkpoint(TRUNCATE)` and explicitly verify return status
+     `[busy=0]`. If busy != 0, abort the download with a 503 retry response
+     rather than serving a corrupted file.
+
+B. Tombstone & Stale Device Resync Protocol:
+   - Server stores `tombstone_horizon_rev` (the lowest revision for which
+     tombstones are still retained; default retention: 90 days).
+   - If an offline device requests sync with `since < tombstone_horizon_rev`,
+     the server rejects incremental sync and returns `{ resync_required: true }`.
+   - On `resync_required`, the client preserves local pending dirty records (_d=1),
+     replaces local clean cache with a full server snapshot, and then re-applies
+     its dirty records on top of the clean state. This prevents resurrecting
+     records deleted beyond the retention window.
+
+C. LocalStorage & Offline Safety:
+   - Zero Debounce on Critical Data: Add, Edit, Delete, and Duplicate actions
+     persist to `localStorage` immediately and synchronously. No debouncing
+     is permitted for transaction data.
+   - Quota Failure Guard: In `persist()`, catch `QuotaExceededError` explicitly,
+     halt silent degradation, and display an actionable UI alert instructing
+     the user to sync with the server.
+   - Storage Key Partitioning: Separate auth tokens (`kh_t`), PIN settings (`kh_pin`),
+     and expense data (`kh_s`) into distinct keys to prevent quota errors from
+     wiping session credentials.
+
+D. Deterministic Sync & Transaction Isolation:
+   - Explicit Lock: All sync operations use `$db->exec('BEGIN IMMEDIATE TRANSACTION')`
+     at start of execution, eliminating SQLITE_BUSY deadlocks and race conditions.
+   - Deterministic LWW Conflict Resolution:
+     * If incoming.updated > existing.updated: Incoming wins.
+     * If incoming.updated < existing.updated: Existing server record wins.
+     * If incoming.updated === existing.updated: Tie broken deterministically
+       by string comparison of record hash/ID.
+     * Deletions dominate: Deletion is accepted if incoming.updated >= existing.updated.
+
+E. Fail-Fast API URL Configuration:
+   - Web Platform: Deterministically resolves to same-origin `'api.php'`.
+   - Capacitor Native Platform: Requires an explicit, validated HTTPS URL from
+     `config.js` or in-app settings.
+   - No Silent Fallbacks: If no URL is set or a template placeholder remains on
+     native platform, the app halts network attempts immediately and prompts
+     the user with an explicit setup message.
+
+
+3. REMAINING RISKS OR LIMITATIONS
+--------------------------------------------------------------------------------
+1. Single-Writer SQLite Constraint: SQLite WAL allows unlimited concurrent
+   readers but exactly one concurrent writer. High-frequency concurrent writes
+   depend on `busy_timeout=8000` and the application retry loop. (Sufficient for
+   personal/family use, but not for large multi-tenant SaaS).
+2. Native WebView Storage Persistence: If an Android device runs under critical
+   OS-level storage pressure, browser-managed LocalStorage can theoretically
+   be evicted. Cloud sync remains the primary source of truth.
+3. Network Flakiness during Multi-Part Sync: If connection drops mid-batch,
+   server rolls back atomically, but client must cleanly preserve unconfirmed
+   dirty flags for subsequent retry.
+
+
+4. TESTS & VERIFICATION STILL REQUIRED
+--------------------------------------------------------------------------------
+1. Test SQLite `VACUUM INTO` execution and verify the downloaded snapshot
+   integrity with a secondary SQLite connection.
+2. Simulate a client syncing with `since < tombstone_horizon_rev` and verify
+   it triggers the full-resync protocol without resurrecting deleted items.
+3. Simulate `QuotaExceededError` on `localStorage.setItem` and verify UI error
+   banner displays and auth tokens remain intact.
+4. Execute concurrent `BEGIN IMMEDIATE` sync calls to test write contention
+   and verify zero database deadlocks.
+5. Verify CORS preflight and OPTIONS headers against native Android origin
+   `https://localhost`.
+
+
+5. RECOMMENDED NEXT STEP
+--------------------------------------------------------------------------------
+Proceed to PHASE 3 — Code Quality and Bug Fixes:
+- Centralize API URL resolver in `index.html` with native fail-fast guards.
+- Implement synchronous, un-debounced storage persistence with quota error handling.
+- Prepare hardware back button listener hooks for Capacitor.
+- Preserve all existing UI, styles, and functional flows without modification.
+================================================================================

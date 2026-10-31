@@ -1,0 +1,93 @@
+name: Android Cloud APK Build (Khoroch er Khata)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-debug-apk:
+    name: Build & Verify Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Node.js dependencies
+        run: |
+          if [ ! -f package-lock.json ]; then
+            echo "ERROR: package-lock.json is missing from the repository root. Please commit a valid package-lock.json before running this workflow."
+            exit 1
+          fi
+          npm ci
+
+      - name: Synchronize Capacitor web assets to Android
+        run: npm run cap:sync
+
+      - name: Verify Android web assets & exclude backend PHP/SQLite files
+        run: |
+          test -f android/app/src/main/assets/public/index.html
+          test -f android/app/src/main/assets/public/manifest.json
+          test -f android/app/src/main/assets/public/sw.js
+          if find android/app/src/main/assets/public -name "*.php" -o -name "*.sqlite*" | grep -q .; then
+            echo "ERROR: Server-side PHP or SQLite files found inside Android web assets!"
+            exit 1
+          fi
+
+      - name: Set up Temurin JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      - name: Verify Android SDK & required Build Tools (API 34 / Build-Tools 34.0.0)
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x android/gradlew
+
+      - name: Build Debug APK
+        run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Verify generated APK & inspect package metadata
+        run: |
+          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -s "$APK_PATH" ]; then
+            echo "ERROR: Debug APK was not generated or is empty at $APK_PATH"
+            exit 1
+          fi
+          echo "APK File Verification:"
+          ls -lh "$APK_PATH"
+          sha256sum "$APK_PATH"
+          AAPT_BIN=$(find "$ANDROID_HOME/build-tools" -name "aapt" | sort -V | tail -n 1)
+          if [ -n "$AAPT_BIN" ]; then
+            echo "Inspecting APK package metadata via aapt:"
+            "$AAPT_BIN" dump badging "$APK_PATH" | grep -E "package:|application-label:|sdkVersion:|targetSdkVersion:"
+            "$AAPT_BIN" dump badging "$APK_PATH" | grep -q "name='com.tanvir.khoroch'"
+            "$AAPT_BIN" dump badging "$APK_PATH" | grep -q "versionCode='1'"
+            "$AAPT_BIN" dump badging "$APK_PATH" | grep -q "versionName='1.0.0'"
+          fi
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: khoroch-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30

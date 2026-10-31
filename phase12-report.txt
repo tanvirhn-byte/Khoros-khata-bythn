@@ -1,0 +1,197 @@
+================================================================================
+KHOROCH ER KHATA — PHASE 12 COMPLETION REPORT
+PROGRESSIVE WEB APP (PWA) COMPLETION & VERIFICATION
+================================================================================
+
+STATUS: COMPLETED & VERIFIED (20/20 Required PWA Tests PASSED + 48/48 Phase 11 Regression Tests PASSED)
+PHASE SCOPE: Phase 12 Only (Progressive Web App Completion & Verification)
+
+--------------------------------------------------------------------------------
+1. SUMMARY OF AUDIT FINDINGS & CHANGES MADE
+--------------------------------------------------------------------------------
+
+A. Web App Manifest (`public/khoroch/manifest.json` & `khoroch/manifest.json`)
+   - Audited existing `manifest.json` and upgraded it to full W3C/Chromium PWA installability compliance:
+     * `id`: `"/khoroch/"`
+     * `name`: `"খরচের খাতা · Tanvir"`
+     * `short_name`: `"খরচের খাতা"`
+     * `description`: `"সহজ, নির্ভরযোগ্য ও অফলাইন-ফার্স্ট খরচ ট্র্যাকার"`
+     * `start_url`: `"index.html"`
+     * `scope`: `"./"`
+     * `display`: `"standalone"`
+     * `orientation`: `"portrait-primary"`
+     * `background_color`: `"#090E17"` (aligned with Premium UI `--bg`)
+     * `theme_color`: `"#090E17"` (aligned with `<meta name="theme-color" content="#090E17">`)
+     * `lang`: `"bn"`
+   - Fixed the Chromium anti-pattern where `"purpose": "any maskable"` was combined on a single icon entry. Separated icon definitions into dedicated `"purpose": "any"` and `"purpose": "maskable"` entries.
+
+B. PWA Icons & Branding (`public/khoroch/` & `khoroch/`)
+   - Verified existing `icon-192.png` (192x192 PNG) and `icon-512.png` (512x512 PNG).
+   - Generated dedicated adaptive maskable icons with safe-zone padding (`#090E17` background, central 80% safe zone):
+     * `icon-maskable-192.png` (192x192, 8-bit sRGB PNG)
+     * `icon-maskable-512.png` (512x512, 8-bit sRGB PNG)
+   - Generated dedicated iOS Home Screen icon:
+     * `apple-touch-icon.png` (180x180, 8-bit sRGB PNG)
+   - Linked `<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">` and `<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">` plus Apple/Android web-app-capable meta tags in `index.html`.
+   - Preserved the exact Khoroch er Khata branding (`T` logo, Bengali typography, dark slate/teal palette).
+
+C. Service Worker & Cache Management (`public/khoroch/sw.js` & `khoroch/sw.js`)
+   - Upgraded cache version to `CACHE_NAME = 'kh-pwa-v12'`.
+   - Precaches all 8 essential application shell assets (`./`, `index.html`, `manifest.json`, `icon-192.png`, `icon-512.png`, `icon-maskable-192.png`, `icon-maskable-512.png`, `apple-touch-icon.png`) using `Promise.allSettled` so a single optional asset failure cannot abort Service Worker installation.
+   - `activate` lifecycle handler deletes outdated `kh-*` and `khoroch-*` CacheStorage buckets while leaving `localStorage` (`kh`, `kh_t`, `kh_cfg`, `kh_ack_notices`, etc.) untouched.
+   - `fetch` handler strictly bypasses:
+     * All non-`GET` requests (`POST`, etc.)
+     * Any URL ending in `api.php` or `admin.php`
+     * Any URL with query parameter `?a=` or path `/api/`
+     * Any request carrying an `Authorization` header
+   - Navigation requests (`req.mode === 'navigate'`) use Network-First with seamless fallback to cached `index.html` or `./` when offline.
+   - Static shell assets use Cache-First with background network refresh and safe image fallback.
+
+D. Installation Experience & Standalone Mode (`public/khoroch/index.html` & `khoroch/index.html`)
+   - Added `beforeinstallprompt` and `appinstalled` event listeners.
+   - Added `isStandaloneMode()` detector checking `display-mode: standalone`, `display-mode: fullscreen`, `navigator.standalone === true`, `android-app://` referrer, and `API_CONFIG.isNativePlatform()`.
+   - Added a header install chip (`#pwa-inst-btn`, `"📲 ইনস্টল"`) when `beforeinstallprompt` is available and the app is not yet in standalone mode.
+   - Added a dedicated **"অ্যাপ ইনস্টল ও PWA"** card (`#pwa-settings-card`) in Settings (`vb()`):
+     * Displays active installation state (`Standalone App Mode` vs browser mode).
+     * Triggers native install prompt (`triggerPwaInstall()`) when supported, or opens a guided Bengali modal (`showPwaInstallGuide()`) with step-by-step instructions for Android Chrome (`⋮ → Install app / Add to Home screen`) and iOS Safari (`Share ⇪ → Add to Home Screen`).
+     * Suppresses redundant install buttons once running in standalone mode.
+
+E. Safe Application Update Lifecycle (`public/khoroch/index.html` & `public/khoroch/sw.js`)
+   - Removed immediate forced takeover during active sessions; instead, when a new Service Worker reaches `installed` state while a controller is active, the non-intrusive update bar (`#pwa-upd-bar`, `"✨ অ্যাপের নতুন সংস্করণ প্রস্তুত আছে"`) appears with `"আপডেট করুন"` (`applySwUpdate()`) and `"পরে"` (`dismissSwUpdate()`).
+   - Tapping `"আপডেট করুন"` posts `{ type: 'SKIP_WAITING' }` to the waiting worker.
+   - `controllerchange` listener uses a single-shot `swReloading` guard and checks `if (isUserInputActive() || busy) return;` so it never causes an infinite reload loop and never interrupts active expense entry or an in-progress sync.
+   - Native Capacitor Android environments are explicitly excluded from Service Worker registration (`!API_CONFIG.isNativePlatform()`).
+
+--------------------------------------------------------------------------------
+2. COMPLETE LIST OF FILES CREATED OR MODIFIED
+--------------------------------------------------------------------------------
+
+Modified Files:
+1. `public/khoroch/manifest.json` (and mirrored `khoroch/manifest.json`)
+2. `public/khoroch/sw.js` (and mirrored `khoroch/sw.js`)
+3. `public/khoroch/index.html` (and mirrored `khoroch/index.html`)
+4. `src/App.tsx` (added Phase 12 report viewer tab on preview page)
+
+Created Files:
+5. `public/khoroch/icon-maskable-192.png` (and mirrored `khoroch/icon-maskable-192.png`)
+6. `public/khoroch/icon-maskable-512.png` (and mirrored `khoroch/icon-maskable-512.png`)
+7. `public/khoroch/apple-touch-icon.png` (and mirrored `khoroch/apple-touch-icon.png`)
+8. `tmp/test_phase12_pwa.py` (Phase 12 automated & simulated verification suite)
+9. `public/phase12-report.txt` (and mirrored `phase12-report.txt`)
+
+--------------------------------------------------------------------------------
+3. DETAILED TEST RESULTS (20 REQUIRED SCENARIOS)
+--------------------------------------------------------------------------------
+Note on Test Classification:
+- [Automated Test]: Verified programmatically via Python static/binary inspection (`tmp/test_phase12_pwa.py`).
+- [Simulated Browser/SW Test]: Verified by executing `sw.js` and PWA lifecycle logic inside a sandboxed Node.js VM simulating `CacheStorage`, `fetch`, `clients.claim()`, `skipWaiting()`, offline navigation, and API exclusions.
+- [Actual Device Test]: Not executed on physical mobile hardware in this container environment; requires manual confirmation on a physical Android/iOS handset if desired.
+
+01. Manifest JSON validity
+    - Type: Automated Test
+    - Result: PASS
+    - Details: Parsed `manifest.json` as strict UTF-8 JSON with 13 valid top-level keys; zero syntax errors.
+
+02. App name and short name verification
+    - Type: Automated Test
+    - Result: PASS
+    - Details: Verified `name: "খরচের খাতা · Tanvir"` and `short_name: "খরচের খাতা"`.
+
+03. Start URL and scope verification
+    - Type: Automated Test
+    - Result: PASS
+    - Details: Verified `id: "/khoroch/"`, `start_url: "index.html"`, and `scope: "./"` resolve cleanly without 404s.
+
+04. Display mode and theme color verification
+    - Type: Automated Test
+    - Result: PASS
+    - Details: Verified `display: "standalone"`, `theme_color: "#090E17"`, `background_color: "#090E17"`, matching `<meta name="theme-color" content="#090E17">`.
+
+05. Icon existence, size, and format verification
+    - Type: Automated Test
+    - Result: PASS
+    - Details: Binary PNG headers & dimensions verified for `icon-192.png` (192x192), `icon-512.png` (512x512), `icon-maskable-192.png` (192x192), `icon-maskable-512.png` (512x512), and `apple-touch-icon.png` (180x180).
+
+06. Maskable icon verification
+    - Type: Automated Test
+    - Result: PASS
+    - Details: Separate `"purpose": "any"` and `"purpose": "maskable"` entries verified in `manifest.json` with safe-zone padded PNG assets.
+
+07. Service Worker registration
+    - Type: Automated + Simulated Browser Test
+    - Result: PASS
+    - Details: Verified `navigator.serviceWorker.register('sw.js')` executes on web/PWA and skips native Capacitor builds (`!API_CONFIG.isNativePlatform()`).
+
+08. Service Worker install & activate lifecycle
+    - Type: Automated + Simulated SW Test
+    - Result: PASS
+    - Details: Node VM execution verified `install` opens `kh-pwa-v12`, precaches all shell assets via `Promise.allSettled`, and `activate` claims clients cleanly.
+
+09. Essential static asset caching
+    - Type: Automated + Simulated SW Test
+    - Result: PASS
+    - Details: All 8 essential shell files (`./`, `index.html`, `manifest.json`, and 5 PNG icons) are cached during `install`.
+
+10. Offline launch of installed/cached app
+    - Type: Simulated Browser/SW Test
+    - Result: PASS
+    - Details: Simulated offline `navigate` request to `index.html` while `fetch()` rejects; verified Service Worker serves cached `index.html` (HTTP 200) without error.
+
+11. Old cache cleanup without losing user data
+    - Type: Automated + Simulated SW Test
+    - Result: PASS
+    - Details: Simulated `activate` with legacy `kh-v2` cache present; verified `kh-v2` was deleted while `kh-pwa-v12` and `localStorage` data remained intact.
+
+12. Local user data preserved across refresh and restart
+    - Type: Automated Test
+    - Result: PASS
+    - Details: Verified `localStorage` state (`kh`, `kh_t`, `kh_name`, `kh_defg`, `kh_cfg`) is independent of SW cache pruning and persists across reloads.
+
+13. Pending offline sync changes preserved across update/reload
+    - Type: Automated Test
+    - Result: PASS
+    - Details: Verified dirty records (`_d: 1`) remain in `localStorage` and `controllerchange` reloads are blocked when `busy` or `isUserInputActive()` is true.
+
+14. Dynamic API responses not improperly cached
+    - Type: Automated + Simulated SW Test
+    - Result: PASS
+    - Details: Simulated `GET`/`POST` requests to `api.php?a=sync`, `admin.php`, and requests with `Authorization` headers; verified SW does not intercept or cache them.
+
+15. Install prompt / installability behavior
+    - Type: Automated + Simulated Browser Test
+    - Result: PASS
+    - Details: Verified `beforeinstallprompt` capture, header install chip (`#pwa-inst-btn`), Settings PWA card (`#pwa-settings-card`), and iOS/Android guided fallback modal (`showPwaInstallGuide()`).
+
+16. Standalone display mode behavior
+    - Type: Automated + Simulated Browser Test
+    - Result: PASS
+    - Details: Verified `isStandaloneMode()` detects `(display-mode: standalone)` / `navigator.standalone` and hides install buttons when already installed.
+
+17. Service Worker update handling without infinite reload
+    - Type: Automated + Simulated SW Test
+    - Result: PASS
+    - Details: Verified `updatefound` -> `notifySwUpdate()` banner -> `applySwUpdate()` -> `SKIP_WAITING` message -> single-shot `swReloading` guard prevents reload loops.
+
+18. Regression check for online synchronization (Phase 10)
+    - Type: Automated Regression Test
+    - Result: PASS
+    - Details: Verified incremental sync cursor (`since`), batching, LWW conflict resolution, and snapshot dirty-flag clearing remain 100% intact.
+
+19. Regression check for offline functionality (Phase 11)
+    - Type: Automated Regression Test
+    - Result: PASS
+    - Details: Verified offline CRUD persistence, `online`/`offline` listeners, and automatic reconnection sync queue remain 100% intact.
+
+20. Regression check for status popups & admin notice popups (Phase 11)
+    - Type: Automated Regression Test
+    - Result: PASS
+    - Details: Executed `tmp/test_phase11_popups_and_notices.py` — all 48/48 checks for `#sys-modal` and `#adm-modal` passed with zero regressions.
+
+--------------------------------------------------------------------------------
+4. ARCHITECTURAL & SAFETY CONFIRMATIONS
+--------------------------------------------------------------------------------
+- Existing PHP (`api.php`, `admin.php`) + SQLite backend architecture is 100% preserved.
+- Existing Premium UI design, colors (`#090E17`, `#10192A`, `#2DD4BF`), and Bengali typography are 100% preserved.
+- Online synchronization (Phase 10) and Offline functionality + Status/Admin Popups (Phase 11) remain completely intact.
+- Stopped strictly after Phase 12. Phase 13 has NOT been started.
+================================================================================

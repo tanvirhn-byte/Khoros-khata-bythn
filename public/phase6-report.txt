@@ -1,0 +1,155 @@
+================================================================================
+KHOROCH ER KHATA — PHASE 6: DATA-INTEGRITY & MULTI-USER ISOLATION REPORT
+Status: COMPLETED, FULLY HARDENED & VERIFIED (Awaiting Approval for Phase 7)
+Date: October 2026
+================================================================================
+
+1. PHASE STATUS & EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+Phase 6 data-integrity, multi-user data isolation, and frontend sync-rejection
+handling verification has been completely audited, implemented, and verified.
+
+Strict Rules Maintained:
+- Preserved 100% of existing features, UI, layout, colors, and design.
+- Database architecture and composite primary keys (user_id, id) preserved.
+- No new features introduced; zero unnecessary changes.
+- Phase 7 has NOT been started.
+
+
+2. DATA-INTEGRITY EDGE CASE AUDIT & DETERMINATIONS
+--------------------------------------------------------------------------------
+Point 1: Does the application support legitimate expenses without a group_id?
+- Determination: NO. The application enforces a strict hierarchical data model
+  where groups are mandatory parent containers for all transactions.
+  - Client Initialization: The app automatically seeds a default group (`g-main`,
+    "Full College Life") on first run.
+  - Mandatory Group Rule: The UI explicitly prevents deleting the last remaining group:
+    `if(S.parents.filter(p=>!p.deleted).length < 2) return toast('অন্তত একটি গ্রুপ থাকতে হবে');`
+  - Transaction Creation: The expense form (`openForm` / `sv`) binds every expense to
+    the active group: `o = { pid: cur, ... }`. There is no "No Group" UI option.
+  - Queries & Views: All dashboard summaries, transaction lists, budgets, and reports
+    filter strictly by active group: `exps = () => S.exps.filter(e => e.pid == cur && !e.deleted)`.
+  - Backend Report Endpoint: `api.php?a=report` strictly mandates a valid `group` ID.
+
+Point 2: Effect of resetting invalid/foreign group_id to ''
+- Determination: Because the frontend does not support ungrouped expenses, resetting
+  an invalid or foreign group ID to `''` causes functional data loss:
+  - An expense with `group_id = ''` is stored as an orphaned record in the database.
+  - When synced to client storage, `e.pid` is `''`.
+  - Because `cur` is always a valid non-empty group ID (e.g., `'g-main'`), `e.pid == cur`
+    will NEVER match.
+  - The transaction disappears completely from the user's dashboard, list view, and reports.
+  - The user can neither view, edit, search, nor delete the orphaned record.
+  - Therefore, silent fallback to `''` is an unsafe anti-pattern that corrupts user experience.
+
+Point 3: Safe Rejection of Invalid/Foreign Group Expenses
+- Architectural Decision & Implementation:
+  - Since groups are mandatory, `api.php` safely REJECTS invalid, foreign, or ungrouped
+    expenses instead of silently saving them with `group_id = ''`.
+  - Active expenses without a verified, owned group in `$groupSet` are skipped completely
+    (`continue;`). They are never inserted into `expenses` or `expense_categories`.
+  - Existing Expense Deletions (`deleted = 1`): If a user deletes an existing expense,
+    the tombstone is updated while preserving the original verified `group_id`.
+  - Categories: Categories with invalid/foreign group IDs are similarly rejected safely.
+
+
+3. FRONTEND SYNC-REJECTION HANDLING & DATA PRESERVATION
+--------------------------------------------------------------------------------
+Issue Diagnosed in Existing Frontend:
+Previously, upon receiving any sync response, the client ran:
+  `[S.parents,S.cats,S.exps,S.prefs].forEach(a=>a.forEach(x=>{if(x._d&&snap.get(x.id)===x.updated)delete x._d}));`
+This blindly cleared `_d` on every sent item, even if the backend rejected it and
+omitted it from the response. The local item was falsely marked as successfully synced,
+stopping future retries and causing data loss if local cache was cleared or fullSync ran.
+
+Frontend Corrections Applied (`index.html`):
+1. Selective `_d` Clearance:
+   `delete x._d` is now guarded strictly by server confirmation:
+   `if (confE.has(x.id)) { delete x._d; delete x._rej; } else { x._rej = 1; rejCount++; }`
+   Rejected items NEVER lose their `_d = 1` dirty flag.
+2. Local Data Preservation:
+   Rejected expenses are never removed from `S.exps` or LocalStorage. They remain 100%
+   safe locally.
+3. User Visibility & Indicator:
+   - In `exps()`: Rejected pending expenses remain visible in active views:
+     `exps = () => S.exps.filter(e => (e.pid == cur || (e._rej && !e.deleted)) && !e.deleted)`.
+   - In `eitem()`: A prominent badge (`গ্রুপ প্রয়োজন`) is displayed on rejected expenses.
+   - Header Dot: `dot('err')` turns the sync indicator to "সমস্যা" (amber/red).
+   - Toast Alert: Informs user:
+     `সতর্কতা: Nটি খরচের গ্রুপ সঠিক না থাকায় সিঙ্ক হয়নি। খরচ এডিট করে গ্রুপ ঠিক করুন।`
+4. Recovery Flow:
+   When the user clicks `✎ এডিট`, `sv(id)` rebinds the expense to the active group (`cur`),
+   clears `_rej`, and triggers sync. The expense is immediately accepted and synced.
+5. Polling Throttle:
+   `ping()` avoids repeated background sync spam if all pending items are flagged as
+   rejected and awaiting user recovery.
+
+
+4. RELATED RECORD OWNERSHIP RULES (FINAL)
+--------------------------------------------------------------------------------
+Entity               Validation Rule                                    Resolution Action
+--------------------------------------------------------------------------------
+Expense -> Group     `pid` in authenticated user's active groups        Reject safely (do not insert)
+Expense -> Category  `cat_id` in authenticated user's active categories Discard foreign category mapping
+Category -> Group    `pid` in authenticated user's active groups        Reject safely (do not insert)
+Category -> Parent   `parent` in authenticated user's active categories Reset to NULL (top-level)
+Report -> Group      `group` in authenticated user's active groups      HTTP 403 Forbidden
+
+
+5. ACTUAL TEST CASES EXECUTED & VERIFICATION RESULTS
+--------------------------------------------------------------------------------
+Suite A: Backend Edge-Case Hardening (`tmp/test_phase6_edge_case.py`)
+[PASS 1] User B seeded valid grouped expense ($5,000 in `grp_b_main`).
+[PASS 2] User A seeded valid group `grp_a_main` and category `cat_a_food`.
+[PASS 3] TEST 1: Legitimate grouped expense synchronized successfully.
+[PASS 4] TEST 2: Ungrouped expenses safely rejected (not saved to DB, not returned in sync).
+[PASS 5] TEST 3: Foreign group expense safely rejected (User B's data 100% untouched).
+[PASS 6] TEST 4: Nonexistent group expense safely rejected (zero rows written).
+[PASS 7] TEST 5: Offline batch synchronization verified (group created first, expenses attached).
+[PASS 8] TEST 6: Legitimate expense deletion verified.
+[PASS 9] TEST 7: User B's data verified 100% intact and isolated.
+
+Suite B: Frontend Sync-Rejection & Data Preservation (`tmp/test_phase6_frontend_rejection.py`)
+[PASS 1] Alice and Bob initialized with independent groups.
+[PASS 2] Task 2: Backend rejection of empty, missing, foreign, and fake group IDs
+         verified; `_d` is NEVER cleared on rejected items.
+[PASS 3] Task 3: Local pending expenses remain 100% preserved in client storage (count = 4).
+[PASS 4] Task 4: Frontend shows dot 'err', error status message, and Bengali toast warning.
+[PASS 5] Task 5: Mixed sync batch (2 valid + 4 rejected): Valid expenses save to DB &
+         clear `_d`; rejected items keep `_d = 1` and remain local.
+[PASS 6] Task 6: Sync retries are completely idempotent; zero duplicate DB records.
+[PASS 7] Task 7: User recovery flow verified: After user corrects group, all 6 expenses
+         synchronize cleanly (`pend() == 0`, dot 'ok').
+[PASS 8] Task 8: Deletions, offline batches, and Bob's data isolation verified 100% intact.
+
+=== ALL PHASE 6 AUTOMATED TESTS PASSED (17/17) ===
+
+
+6. CHANGED FILES
+--------------------------------------------------------------------------------
+1. `public/khoroch/index.html` & `khoroch/index.html`:
+   - Updated sync response processor to guard `delete x._d` strictly with server confirmation.
+   - Preserved rejected items locally, added `_rej` tracking and UI tag.
+   - Added recovery flow in `sv()` and throttled `ping()` for rejected items.
+2. `public/khoroch/api.php` & `khoroch/api.php`:
+   - Enforced safe rejection of invalid/foreign group items without silent empty-string fallbacks.
+   - Added `rejected` map to sync JSON response for client recovery tracking.
+3. `public/phase6-report.txt` & `phase6-report.txt`:
+   - Exported comprehensive Phase 6 completion documentation.
+
+
+7. REMAINING RISKS & LIMITATIONS
+--------------------------------------------------------------------------------
+1. Server-Side PHP Environment:
+   - Requires `pdo_sqlite` enabled in production hosting environment.
+2. Web Server Direct Access Restrictions:
+   - Ensure Apache `.htaccess` inside `khoroch/data/` denies web access to `khoroch.sqlite`.
+
+
+8. RECOMMENDED NEXT STEP
+--------------------------------------------------------------------------------
+Phase 6 is fully completed, hardened, and verified.
+Awaiting user approval to proceed to:
+-> PHASE 7: BACKEND API & CORS HARDENING
+   (Secure CORS allowlist, OPTIONS preflight handling, JSON headers, and origin verification).
+================================================================================
